@@ -51,7 +51,7 @@ let contador = 0;
 const nuevaClave = () => `r${Date.now()}-${++contador}`;
 
 /** Dos renglones son "el mismo" si piden exactamente lo mismo. */
-function mismoArmado(a: NuevoItem, b: NuevoItem): boolean {
+export function mismoArmado(a: NuevoItem, b: NuevoItem): boolean {
   return (
     a.productoId === b.productoId &&
     a.varianteId === b.varianteId &&
@@ -61,7 +61,7 @@ function mismoArmado(a: NuevoItem, b: NuevoItem): boolean {
   );
 }
 
-const CANTIDAD_MAXIMA = 99;
+export const CANTIDAD_MAXIMA = 99;
 
 export const useCarrito = create<EstadoCarrito>()((set) => ({
   ...DATOS_INICIALES,

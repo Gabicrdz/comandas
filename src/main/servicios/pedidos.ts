@@ -4,8 +4,8 @@
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { BaseDeDatos } from '../db/conexion';
-import { pagos, pedidoItemAgregados, pedidoItems, pedidos } from '../db/esquema';
-import type { esquemaEstado, esquemaPagos, esquemaPedido } from '@compartido/esquemas';
+import { pagos, pedidoItemAgregados, pedidoItems, pedidos, rondas, usuarios } from '../db/esquema';
+import type { esquemaEstado, esquemaItemPedido, esquemaPagos, esquemaPedido } from '@compartido/esquemas';
 import { armarLinea, type Linea } from '@compartido/precios';
 import { pesos } from '@compartido/dinero';
 import {
@@ -22,7 +22,9 @@ import { registrarClienteDePedido } from './clientes';
 
 type PedidoValidado = z.output<typeof esquemaPedido>;
 type PagosValidados = z.output<typeof esquemaPagos>;
-type Tx = Parameters<Parameters<BaseDeDatos['transaction']>[0]>[0];
+export type Tx = Parameters<Parameters<BaseDeDatos['transaction']>[0]>[0];
+type ItemValidado = z.output<typeof esquemaItemPedido>;
+export type LineaArmada = Linea & { nota: string; cantidad: number };
 
 const ahoraSql = sql`(datetime('now', 'localtime'))`;
 
@@ -76,6 +78,73 @@ function guardarPagos(
   }
 }
 
+/**
+ * Vuelve a armar cada renglón con los precios de la BASE (nunca con los que
+ * mande la ventana) y revisa que todo se pueda vender. Lo usan el mostrador
+ * (crearPedido) y las rondas de las mesas (servicios/salon.ts).
+ */
+export function armarLineas(tx: Tx, items: ItemValidado[]): LineaArmada[] {
+  const menu = obtenerMenu(tx);
+  const categoriasActivas = new Set(menu.categorias.filter((c) => c.activa).map((c) => c.id));
+  return items.map((item) => {
+    const r = armarLinea(menu, item);
+    if (!r.ok) throw new ErrorDeUsuario(r.error);
+    if (!r.valor.producto.disponible) {
+      throw new ErrorDeUsuario(`"${r.valor.producto.nombre}" está agotado. Sacalo del pedido.`);
+    }
+    if (!categoriasActivas.has(r.valor.producto.categoriaId)) {
+      throw new ErrorDeUsuario(`"${r.valor.producto.nombre}" está en una categoría oculta.`);
+    }
+    return { ...r.valor, nota: item.nota, cantidad: item.cantidad };
+  });
+}
+
+/** Guarda los renglones (con la "foto" de nombres y precios) y sus agregados. */
+export function guardarLineas(tx: Tx, pedidoId: number, lineas: LineaArmada[], ronda = 1, ordenDesde = 0): void {
+  lineas.forEach((l, i) => {
+    const itemId = tx
+      .insert(pedidoItems)
+      .values({
+        pedidoId,
+        productoId: l.producto.id,
+        varianteId: l.variante?.id ?? null,
+        nombre: l.producto.nombre,
+        varianteNombre: l.variante?.nombre ?? '',
+        cantidad: l.cantidad,
+        unitarioCentavos: l.unitarioCentavos,
+        agregadosCentavos: l.agregadosCentavos,
+        totalCentavos: l.totalCentavos,
+        nota: l.nota,
+        vaACocina: l.producto.vaACocina,
+        orden: ordenDesde + i,
+        ronda,
+      })
+      .returning({ id: pedidoItems.id })
+      .get().id;
+    for (const a of l.agregados) {
+      tx.insert(pedidoItemAgregados)
+        .values({
+          itemId,
+          opcionId: a.opcion.id,
+          grupoNombre: a.grupo.nombre,
+          nombre: a.opcion.nombre,
+          precioCentavos: a.opcion.precioCentavos,
+        })
+        .run();
+    }
+  });
+}
+
+/** El próximo número del día (1, 2, 3…). Siempre dentro de la transacción que guarda. */
+export function siguienteNumero(tx: Tx, fecha: string): number {
+  const { siguiente } = tx
+    .select({ siguiente: sql<number>`coalesce(max(${pedidos.numero}), 0) + 1` })
+    .from(pedidos)
+    .where(eq(pedidos.fecha, fecha))
+    .get()!;
+  return Number(siguiente);
+}
+
 export function crearPedido(
   db: BaseDeDatos,
   datos: PedidoValidado,
@@ -84,19 +153,7 @@ export function crearPedido(
 ): PedidoCreado {
   return db.transaction((tx) => {
     // 1) Volver a armar cada renglón con los precios de la base.
-    const menu = obtenerMenu(tx);
-    const categoriasActivas = new Set(menu.categorias.filter((c) => c.activa).map((c) => c.id));
-    const lineas: (Linea & { nota: string; cantidad: number })[] = datos.items.map((item) => {
-      const r = armarLinea(menu, item);
-      if (!r.ok) throw new ErrorDeUsuario(r.error);
-      if (!r.valor.producto.disponible) {
-        throw new ErrorDeUsuario(`"${r.valor.producto.nombre}" está agotado. Sacalo del pedido.`);
-      }
-      if (!categoriasActivas.has(r.valor.producto.categoriaId)) {
-        throw new ErrorDeUsuario(`"${r.valor.producto.nombre}" está en una categoría oculta.`);
-      }
-      return { ...r.valor, nota: item.nota, cantidad: item.cantidad };
-    });
+    const lineas = armarLineas(tx, datos.items);
 
     // 2) Totales.
     const subtotalCentavos = lineas.reduce((s, l) => s + l.totalCentavos, 0);
@@ -115,12 +172,7 @@ export function crearPedido(
 
     // 4) Número del día y guardado (todo dentro de la misma transacción).
     const fecha = fechaLocal(ahora);
-    const { siguiente } = tx
-      .select({ siguiente: sql<number>`coalesce(max(${pedidos.numero}), 0) + 1` })
-      .from(pedidos)
-      .where(eq(pedidos.fecha, fecha))
-      .get()!;
-    const numero = Number(siguiente);
+    const numero = siguienteNumero(tx, fecha);
     // Si trae teléfono, el cliente queda agendado (o se actualiza su dirección).
     const clienteId = registrarClienteDePedido(
       tx,
@@ -153,37 +205,7 @@ export function crearPedido(
       .returning({ id: pedidos.id })
       .get().id;
 
-    lineas.forEach((l, orden) => {
-      const itemId = tx
-        .insert(pedidoItems)
-        .values({
-          pedidoId,
-          productoId: l.producto.id,
-          varianteId: l.variante?.id ?? null,
-          nombre: l.producto.nombre,
-          varianteNombre: l.variante?.nombre ?? '',
-          cantidad: l.cantidad,
-          unitarioCentavos: l.unitarioCentavos,
-          agregadosCentavos: l.agregadosCentavos,
-          totalCentavos: l.totalCentavos,
-          nota: l.nota,
-          vaACocina: l.producto.vaACocina,
-          orden,
-        })
-        .returning({ id: pedidoItems.id })
-        .get().id;
-      for (const a of l.agregados) {
-        tx.insert(pedidoItemAgregados)
-          .values({
-            itemId,
-            opcionId: a.opcion.id,
-            grupoNombre: a.grupo.nombre,
-            nombre: a.opcion.nombre,
-            precioCentavos: a.opcion.precioCentavos,
-          })
-          .run();
-      }
-    });
+    guardarLineas(tx, pedidoId, lineas);
 
     if (cajaId !== null) guardarPagos(tx, pedidoId, pagosCalculados, cajaId, usuarioId);
 
@@ -233,6 +255,19 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
         .all()
     : [];
   const listaPagos = db.select().from(pagos).where(inArray(pagos.pedidoId, ids)).orderBy(asc(pagos.id)).all();
+  const listaRondas = db
+    .select({ pedidoId: rondas.pedidoId, numero: rondas.numero, creadaEn: rondas.creadaEn, usuario: usuarios.nombre })
+    .from(rondas)
+    .leftJoin(usuarios, eq(usuarios.id, rondas.usuarioId))
+    .where(inArray(rondas.pedidoId, ids))
+    .orderBy(asc(rondas.numero))
+    .all();
+  const idsMozos = [...new Set(filas.map((f) => f.mozoId).filter((m): m is number => m !== null))];
+  const mozos = new Map(
+    (idsMozos.length ? db.select({ id: usuarios.id, nombre: usuarios.nombre }).from(usuarios).where(inArray(usuarios.id, idsMozos)).all() : []).map(
+      (u) => [u.id, u.nombre],
+    ),
+  );
 
   return filas.map((f) => ({
     id: f.id,
@@ -263,6 +298,7 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
         totalCentavos: i.totalCentavos,
         nota: i.nota,
         vaACocina: i.vaACocina,
+        ronda: i.ronda,
         agregados: agregados
           .filter((a) => a.itemId === i.id)
           .map((a) => ({ grupoNombre: a.grupoNombre, nombre: a.nombre, precioCentavos: a.precioCentavos })),
@@ -275,6 +311,14 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
         recibidoCentavos: p.recibidoCentavos,
         vueltoCentavos: p.vueltoCentavos,
       })),
+    mesaId: f.mesaId,
+    comensales: f.comensales,
+    mozoId: f.mozoId,
+    mozo: f.mozoId !== null ? (mozos.get(f.mozoId) ?? null) : null,
+    cuentaPedidaEn: f.cuentaPedidaEn,
+    rondas: listaRondas
+      .filter((r) => r.pedidoId === f.id)
+      .map((r) => ({ numero: r.numero, hora: r.creadaEn.slice(11, 16), usuario: r.usuario ?? null })),
   }));
 }
 
@@ -326,8 +370,13 @@ export function cobrarPedido(
     if (pedido.cobrado) throw new ErrorDeUsuario(`El pedido #${pedido.numero} ya estaba cobrado.`);
     if (lista.length === 0) throw new ErrorDeUsuario('Elegí cómo paga.');
     const calculados = calcularPagos(lista, pedido.totalCentavos);
+    if (pedido.mesaId !== null && pedido.items.length === 0) {
+      throw new ErrorDeUsuario(`La mesa ${pedido.mesa} no consumió nada: liberala en vez de cobrarla.`);
+    }
     guardarPagos(tx, id, calculados, cajaParaCobrar(tx), usuarioId);
-    tx.update(pedidos).set({ cobrado: true, actualizadoEn: ahoraSql }).where(eq(pedidos.id, id)).run();
+    // Una mesa que paga ya comió: la cuenta queda cerrada (entregada) y la mesa, libre.
+    const estado = pedido.mesaId !== null ? ('entregado' as const) : pedido.estado;
+    tx.update(pedidos).set({ cobrado: true, estado, actualizadoEn: ahoraSql }).where(eq(pedidos.id, id)).run();
     return {
       id,
       numero: pedido.numero,

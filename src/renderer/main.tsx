@@ -11,6 +11,7 @@ import { PaginaClientes } from '@/features/clientes/pagina-clientes';
 import { PaginaReportes } from '@/features/reportes/pagina-reportes';
 import { PaginaMenu } from '@/features/menu/pagina-menu';
 import { PaginaVender } from '@/features/vender/pagina-vender';
+import { PaginaSalon } from '@/features/salon/pagina-salon';
 import { PaginaPedidos } from '@/features/pedidos/pagina-pedidos';
 import { PaginaCaja } from '@/features/caja/pagina-caja';
 import { PaginaAjustes } from '@/features/ajustes/pagina-ajustes';
@@ -26,7 +27,8 @@ const router = createHashRouter([
     path: '/',
     element: <Estructura />,
     children: [
-      { index: true, element: <Navigate to="/vender" replace /> },
+      { index: true, element: <Navigate to="/salon" replace /> },
+      { path: 'salon', element: <PaginaSalon /> },
       { path: 'vender', element: <PaginaVender /> },
       { path: 'pedidos', element: <PaginaPedidos /> },
       { path: 'caja', element: <PaginaCaja /> },
@@ -34,15 +36,15 @@ const router = createHashRouter([
       { path: 'menu', element: <PaginaMenu /> },
       { path: 'clientes', element: <PaginaClientes /> },
       { path: 'reportes', element: <SoloDueno><PaginaReportes /></SoloDueno> },
-      { path: '*', element: <Navigate to="/vender" replace /> },
+      { path: '*', element: <Navigate to="/salon" replace /> },
     ],
   },
 ]);
 
-/** Si un cajero llega a una sección del dueño, vuelve a Vender. */
+/** Si un cajero llega a una sección del dueño, vuelve al Salón. */
 function SoloDueno({ children }: { children: ReactNode }) {
   const { esDueno } = useUsuario();
-  return esDueno ? children : <Navigate to="/vender" replace />;
+  return esDueno ? children : <Navigate to="/salon" replace />;
 }
 
 /** Sin sesión se ve la pantalla de ingreso; con sesión, el sistema. */

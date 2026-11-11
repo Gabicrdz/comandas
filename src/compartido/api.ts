@@ -14,6 +14,11 @@ import type {
   DatosPagos,
   DatosPedido,
   DatosProducto,
+  DatosAbrirMesa,
+  DatosEditarCuenta,
+  DatosMesa,
+  DatosRonda,
+  DatosZona,
 } from './esquemas';
 import type {
   Caja,
@@ -30,6 +35,8 @@ import type {
   PedidoDeCliente,
   Reporte,
   Respuesta,
+  RondaAgregada,
+  Salon,
   ResumenCaja,
   ResumenDelDia,
   TipoImpresion,
@@ -89,6 +96,25 @@ export interface ApiCaja {
     anular(id: number, motivo: string): Promise<Respuesta<null>>;
     cobrar(id: number, pagos: DatosPagos): Promise<Respuesta<PedidoCreado>>;
   };
+  /** El salón: zonas, mesas y la cuenta de cada mesa. */
+  salon: {
+    obtener(): Promise<Respuesta<Salon>>;
+    /** Solo el dueño y solo si no hay mesas: 2 zonas, 18 mesas, 2 mozos y algunas ocupadas. */
+    cargarEjemplo(): Promise<Respuesta<{ mesas: number; mozos: { nombre: string; pin: string }[]; abiertas: number }>>;
+    guardarZona(datos: DatosZona): Promise<Respuesta<number>>;
+    darDeBajaZona(id: number): Promise<Respuesta<null>>;
+    guardarMesa(datos: DatosMesa): Promise<Respuesta<number>>;
+    moverMesa(id: number, x: number, y: number): Promise<Respuesta<null>>;
+    darDeBajaMesa(id: number): Promise<Respuesta<null>>;
+    /** Devuelve el id de la cuenta (pedido) que se abrió. */
+    abrirMesa(datos: DatosAbrirMesa): Promise<Respuesta<number>>;
+    cuenta(pedidoId: number): Promise<Respuesta<PedidoDetalle>>;
+    agregarRonda(pedidoId: number, datos: DatosRonda): Promise<Respuesta<RondaAgregada>>;
+    editarCuenta(pedidoId: number, datos: DatosEditarCuenta): Promise<Respuesta<null>>;
+    pedirCuenta(pedidoId: number, pedida: boolean): Promise<Respuesta<null>>;
+    /** Se fueron sin pedir nada. */
+    liberar(pedidoId: number): Promise<Respuesta<null>>;
+  };
   clientes: {
     /** Para el delivery: hasta 6 clientes que coinciden por teléfono o nombre. */
     buscar(texto: string): Promise<Respuesta<Cliente[]>>;
@@ -106,6 +132,8 @@ export interface ApiCaja {
     /** Guarda el PDF en Documentos\Comandas\Tickets, lo abre y devuelve la ruta. */
     pdf(id: number, tipo: TipoImpresion): Promise<Respuesta<{ ruta: string }>>;
     impresoras(): Promise<Respuesta<Impresora[]>>;
+    /** La comanda de UNA ronda de una mesa (lo nuevo que pidieron). */
+    ronda(pedidoId: number, ronda: number, destino: 'impresora' | 'pdf'): Promise<Respuesta<{ impreso: boolean; ruta: string | null }>>;
   };
   configuracion: {
     obtener(): Promise<Respuesta<Configuracion>>;
@@ -168,6 +196,20 @@ export const CANALES = {
   pedidoEstado: 'pedidos:estado',
   pedidoAnular: 'pedidos:anular',
   pedidoCobrar: 'pedidos:cobrar',
+  salonObtener: 'salon:obtener',
+  salonCargarEjemplo: 'salon:cargar-ejemplo',
+  zonaGuardar: 'salon:zona-guardar',
+  zonaBaja: 'salon:zona-baja',
+  mesaGuardar: 'salon:mesa-guardar',
+  mesaMover: 'salon:mesa-mover',
+  mesaBaja: 'salon:mesa-baja',
+  mesaAbrir: 'salon:abrir',
+  mesaCuenta: 'salon:cuenta',
+  mesaRonda: 'salon:ronda',
+  mesaEditar: 'salon:editar',
+  mesaPedirCuenta: 'salon:pedir-cuenta',
+  mesaLiberar: 'salon:liberar',
+  impresionRonda: 'impresion:ronda',
   clientesBuscar: 'clientes:buscar',
   clientesListar: 'clientes:listar',
   clientesGuardar: 'clientes:guardar',

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router';
 import {
+  Armchair,
   ChartColumn,
   Lock,
   ReceiptText,
@@ -26,7 +27,8 @@ interface Seccion {
 }
 
 const SECCIONES: Seccion[] = [
-  { ruta: '/vender', nombre: 'Vender', icono: ShoppingBag },
+  { ruta: '/salon', nombre: 'Salón', icono: Armchair },
+  { ruta: '/vender', nombre: 'Mostrador', icono: ShoppingBag },
   { ruta: '/pedidos', nombre: 'Pedidos', icono: ReceiptText },
   { ruta: '/caja', nombre: 'Caja', icono: Wallet },
   { ruta: '/menu', nombre: 'Menú', icono: UtensilsCrossed },

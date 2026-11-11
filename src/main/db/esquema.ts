@@ -107,6 +107,10 @@ export const pedidos = sqliteTable('pedidos', {
   usuarioId: integer('usuario_id').references(() => usuarios.id),
   anuladoPor: integer('anulado_por').references(() => usuarios.id),
   clienteId: integer('cliente_id').references(() => clientes.id),
+  mesaId: integer('mesa_id').references(() => mesas.id),
+  comensales: integer('comensales'),
+  mozoId: integer('mozo_id').references(() => usuarios.id),
+  cuentaPedidaEn: text('cuenta_pedida_en'),
 });
 
 export const pedidoItems = sqliteTable('pedido_items', {
@@ -127,6 +131,7 @@ export const pedidoItems = sqliteTable('pedido_items', {
   nota: text('nota').notNull().default(''),
   vaACocina: integer('va_a_cocina', { mode: 'boolean' }).notNull().default(true),
   orden: integer('orden').notNull().default(0),
+  ronda: integer('ronda').notNull().default(1),
 });
 
 export const pedidoItemAgregados = sqliteTable('pedido_item_agregados', {
@@ -159,7 +164,7 @@ export const pagos = sqliteTable('pagos', {
 export const usuarios = sqliteTable('usuarios', {
   id: integer('id').primaryKey(),
   nombre: text('nombre').notNull(),
-  rol: text('rol', { enum: ['dueno', 'cajero'] }).notNull(),
+  rol: text('rol', { enum: ['dueno', 'cajero', 'mozo'] }).notNull(),
   pinHash: text('pin_hash').notNull(),
   pinSal: text('pin_sal').notNull(),
   activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
@@ -204,4 +209,38 @@ export const clientes = sqliteTable('clientes', {
   nota: text('nota').notNull().default(''),
   creadoEn: text('creado_en').notNull().default(ahora),
   actualizadoEn: text('actualizado_en').notNull().default(ahora),
+});
+
+// ───────── Salón (etapa 1 de Comandas) ─────────
+
+export const zonas = sqliteTable('zonas', {
+  id: integer('id').primaryKey(),
+  nombre: text('nombre').notNull(),
+  orden: integer('orden').notNull().default(0),
+  activa: integer('activa', { mode: 'boolean' }).notNull().default(true),
+  creadoEn: text('creado_en').notNull().default(ahora),
+});
+
+export const mesas = sqliteTable('mesas', {
+  id: integer('id').primaryKey(),
+  zonaId: integer('zona_id')
+    .notNull()
+    .references(() => zonas.id),
+  nombre: text('nombre').notNull(),
+  lugares: integer('lugares').notNull().default(4),
+  forma: text('forma', { enum: ['cuadrada', 'redonda', 'larga'] }).notNull().default('cuadrada'),
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  activa: integer('activa', { mode: 'boolean' }).notNull().default(true),
+  creadoEn: text('creado_en').notNull().default(ahora),
+});
+
+export const rondas = sqliteTable('rondas', {
+  id: integer('id').primaryKey(),
+  pedidoId: integer('pedido_id')
+    .notNull()
+    .references(() => pedidos.id),
+  numero: integer('numero').notNull(),
+  creadaEn: text('creada_en').notNull(),
+  usuarioId: integer('usuario_id').references(() => usuarios.id),
 });

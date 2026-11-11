@@ -27,6 +27,9 @@ export function iniciarSesion(db: BaseDeDatos, usuarioId: number, pin: string, a
     throw new ErrorDeUsuario(bloqueado ? 'PIN incorrecto. Esperá 30 segundos para volver a probar.' : 'PIN incorrecto.');
   }
   fallos.delete(usuarioId);
+  if (usuario.rol === 'mozo') {
+    throw new ErrorDeUsuario('Los mozos trabajan desde el celular: la PC es para la caja y el dueño.');
+  }
   actual = usuario;
   return usuario;
 }

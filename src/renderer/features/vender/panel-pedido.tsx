@@ -17,6 +17,8 @@ const ICONOS: Record<TipoPedido, LucideIcon> = {
   mesa: UtensilsCrossed,
 };
 
+const TIPOS_DE_VENDER: TipoPedido[] = ['mostrador', 'llevar', 'delivery'];
+
 interface Props {
   renglones: RenglonCalculado[];
   subtotalCentavos: number;
@@ -58,8 +60,9 @@ export function PanelPedido({
             </span>
           )}
         </div>
-        <div role="radiogroup" aria-label="Tipo de pedido" className="grid grid-cols-4 gap-1 rounded-lg bg-secondary p-1">
-          {(Object.keys(NOMBRE_TIPO) as TipoPedido[]).map((tipo) => {
+        {/* Las mesas se atienden desde Salón (con rondas y cuenta abierta), no desde acá. */}
+        <div role="radiogroup" aria-label="Tipo de pedido" className="grid grid-cols-3 gap-1 rounded-lg bg-secondary p-1">
+          {TIPOS_DE_VENDER.map((tipo) => {
             const Icono = ICONOS[tipo];
             const activo = carrito.tipo === tipo;
             return (

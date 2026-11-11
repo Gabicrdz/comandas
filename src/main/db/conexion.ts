@@ -42,11 +42,24 @@ function aplicarMigraciones(conexion: Database.Database): void {
   }
   MIGRACIONES.slice(actual).forEach((migracion, i) => {
     const version = actual + i + 1;
-    // Cada paso va en una transacción: se aplica entero o no se aplica nada.
-    conexion.transaction(() => {
-      conexion.exec(migracion.sql);
-      conexion.pragma(`user_version = ${version}`);
-    })();
+    // foreign_keys no se puede cambiar DENTRO de una transacción: se apaga antes.
+    if (migracion.reconstruye) conexion.pragma('foreign_keys = OFF');
+    try {
+      // Cada paso va en una transacción: se aplica entero o no se aplica nada.
+      conexion.transaction(() => {
+        conexion.exec(migracion.sql);
+        if (migracion.reconstruye) {
+          // Con las claves apagadas SQLite no revisa nada: lo revisamos nosotros.
+          const rotas = conexion.pragma('foreign_key_check') as unknown[];
+          if (rotas.length > 0) {
+            throw new Error(`La migración ${version} dejaría ${rotas.length} referencias rotas. No se aplicó.`);
+          }
+        }
+        conexion.pragma(`user_version = ${version}`);
+      })();
+    } finally {
+      if (migracion.reconstruye) conexion.pragma('foreign_keys = ON');
+    }
     console.log(`Migración ${version} aplicada: ${migracion.nombre}`);
   });
 }

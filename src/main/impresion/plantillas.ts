@@ -60,14 +60,25 @@ function documento(titulo: string, cuerpo: string, anchoMm: 58 | 80): string {
 }
 
 /** Comanda: lo que tiene que preparar la cocina. Sin precios. */
-export function htmlComanda(p: PedidoDetalle, anchoMm: 58 | 80): string | null {
-  const items = p.items.filter((i) => i.vaACocina);
+export function htmlComanda(p: PedidoDetalle, anchoMm: 58 | 80, ronda?: number): string | null {
+  // En una mesa se imprime UNA ronda (lo nuevo que pidieron), no toda la cuenta.
+  const deLaRonda = ronda === undefined ? p.items : p.items.filter((i) => i.ronda === ronda);
+  const items = deLaRonda.filter((i) => i.vaACocina);
   if (items.length === 0) return null;
-  const cuerpo = `
-    <div class="centro negrita">COMANDA</div>
+  const hora = ronda === undefined ? p.hora : (p.rondas.find((r) => r.numero === ronda)?.hora ?? p.hora);
+  const encabezadoMesa =
+    typeof p.mesaId === 'number'
+      ? `
+    <div class="centro enorme">${destino(p)}</div>
+    <div class="centro grande">${ronda !== undefined ? `Ronda ${ronda}` : `#${p.numero}`}</div>
+    <div class="centro">${fechaCorta(p.fecha)} · ${hora}${p.mozo ? ` · ${escapar(p.mozo)}` : ''}${p.comensales ? ` · ${p.comensales} pers.` : ''}</div>`
+      : `
     <div class="centro enorme">#${p.numero}</div>
     <div class="centro grande">${destino(p)}</div>
-    <div class="centro">${fechaCorta(p.fecha)} · ${p.hora}${p.clienteNombre ? ` · ${escapar(p.clienteNombre)}` : ''}</div>
+    <div class="centro">${fechaCorta(p.fecha)} · ${p.hora}${p.clienteNombre ? ` · ${escapar(p.clienteNombre)}` : ''}</div>`;
+  const cuerpo = `
+    <div class="centro negrita">COMANDA</div>
+    ${encabezadoMesa}
     <div class="linea"></div>
     ${items
       .map(
@@ -80,9 +91,9 @@ export function htmlComanda(p: PedidoDetalle, anchoMm: 58 | 80): string | null {
       )
       .join('')}
     ${p.nota ? `<div class="linea"></div><div class="caja negrita">${escapar(p.nota)}</div>` : ''}
-    ${p.items.length > items.length ? `<div class="linea"></div><div class="chico">+ ${p.items.length - items.length} producto(s) que no van a cocina</div>` : ''}
+    ${deLaRonda.length > items.length ? `<div class="linea"></div><div class="chico">+ ${deLaRonda.length - items.length} producto(s) que no van a cocina</div>` : ''}
   `;
-  return documento(`Comanda #${p.numero}`, cuerpo, anchoMm);
+  return documento(ronda !== undefined ? `Comanda ${destino(p)} ronda ${ronda}` : `Comanda #${p.numero}`, cuerpo, anchoMm);
 }
 
 /** Lo que va arriba del ticket. Se puede pasar solo el nombre (pruebas viejas). */
@@ -111,6 +122,7 @@ export function htmlTicket(p: PedidoDetalle, local: Local, anchoMm: 58 | 80): st
     ${encabezado(local)}
     <div class="centro">${fechaCorta(p.fecha)} · ${p.hora}</div>
     <div class="centro negrita">Pedido #${p.numero} · ${destino(p)}</div>
+    ${typeof p.mesaId === 'number' && (p.mozo || p.comensales) ? `<div class="centro chico">${p.comensales ? `${p.comensales} pers.` : ''}${p.mozo && p.comensales ? ' · ' : ''}${p.mozo ? `Atendió ${escapar(p.mozo)}` : ''}</div>` : ''}
     ${p.clienteNombre ? `<div class="centro">${escapar(p.clienteNombre)}${p.clienteTelefono ? ` · ${escapar(p.clienteTelefono)}` : ''}</div>` : ''}
     ${p.tipo === 'delivery' && p.clienteDireccion ? `<div class="centro negrita">${escapar(p.clienteDireccion)}</div>` : ''}
     <div class="linea"></div>

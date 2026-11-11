@@ -22,16 +22,22 @@ const pedido: PedidoDetalle = {
   motivoAnulacion: '',
   items: [
     {
-      id: 1, nombre: 'Clásica', varianteNombre: '', cantidad: 2, unitarioCentavos: $(8500), agregadosCentavos: $(900), totalCentavos: $(18800), nota: 'pan tostado', vaACocina: true,
+      id: 1, nombre: 'Clásica', varianteNombre: '', cantidad: 2, unitarioCentavos: $(8500), agregadosCentavos: $(900), totalCentavos: $(18800), nota: 'pan tostado', vaACocina: true, ronda: 1,
       agregados: [
         { grupoNombre: 'Punto de la carne', nombre: 'A punto', precioCentavos: 0 },
         { grupoNombre: 'Extras', nombre: 'Cheddar', precioCentavos: $(900) },
       ],
     },
-    { id: 2, nombre: 'Gaseosa', varianteNombre: '1,5 L', cantidad: 1, unitarioCentavos: $(3800), agregadosCentavos: 0, totalCentavos: $(3800), nota: '', vaACocina: false, agregados: [] },
-    { id: 3, nombre: 'Flan casero', varianteNombre: '', cantidad: 1, unitarioCentavos: $(2700), agregadosCentavos: 0, totalCentavos: $(2700), nota: '', vaACocina: true, agregados: [] },
+    { id: 2, nombre: 'Gaseosa', varianteNombre: '1,5 L', cantidad: 1, unitarioCentavos: $(3800), agregadosCentavos: 0, totalCentavos: $(3800), nota: '', vaACocina: false, ronda: 1, agregados: [] },
+    { id: 3, nombre: 'Flan casero', varianteNombre: '', cantidad: 1, unitarioCentavos: $(2700), agregadosCentavos: 0, totalCentavos: $(2700), nota: '', vaACocina: true, ronda: 1, agregados: [] },
   ],
   pagos: [{ medio: 'efectivo', montoCentavos: $(26800), recibidoCentavos: $(30000), vueltoCentavos: $(3200) }],
+  mesaId: null,
+  comensales: null,
+  mozoId: null,
+  mozo: null,
+  cuentaPedidaEn: null,
+  rondas: [],
 };
 
 const texto = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');

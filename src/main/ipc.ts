@@ -26,6 +26,12 @@ import {
   esquemaProducto,
   esquemaRango,
   esquemaUsuario,
+  esquemaAbrirMesa,
+  esquemaEditarCuenta,
+  esquemaMesa,
+  esquemaPosicion,
+  esquemaRonda,
+  esquemaZona,
 } from '@compartido/esquemas';
 import type { Configuracion, Respuesta, Usuario } from '@compartido/tipos';
 import { obtenerDb } from './db/conexion';
@@ -49,7 +55,8 @@ import { cerrarSesion, iniciarSesion, requerir, sesionActual } from './servicios
 import { abrirCaja, cajaAbierta, cerrarCaja, historialDeCajas, registrarMovimiento, resumenDeCaja } from './servicios/caja';
 import { buscarClientes, guardarCliente, listarClientes, pedidosDeCliente } from './servicios/clientes';
 import { obtenerReporte } from './servicios/reportes';
-import { htmlCierre, htmlImpresion } from './impresion/plantillas';
+import { htmlCierre, htmlComanda, htmlImpresion } from './impresion/plantillas';
+import * as salon from './servicios/salon';
 import { guardarPdf, imprimirHtml, listarImpresoras } from './impresion/imprimir';
 
 /** Convierte cualquier error en un mensaje para la ventana. */
@@ -130,7 +137,8 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
     cerrarSesion();
     return null;
   });
-  manejar(CANALES.usuariosParaIngresar, 'libre', nada, () => listarUsuarios(db()));
+  // Los mozos no entran a la PC: van a usar el celular (etapa 2).
+  manejar(CANALES.usuariosParaIngresar, 'libre', nada, () => listarUsuarios(db()).filter((u) => u.rol !== 'mozo'));
   manejar(CANALES.usuariosCrearPrimero, 'libre', z.tuple([z.string(), esquemaPin]), (nombre, pin) => {
     // Solo sirve la primera vez: después, los usuarios los crea el dueño.
     if (hayUsuarios(db())) throw new ErrorDeUsuario('Ya hay usuarios creados. Ingresá con tu PIN.');
@@ -184,6 +192,39 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
 
   // ── Pedidos ──
   manejar(CANALES.pedidoCrear, 'sesion', z.tuple([esquemaPedido]), (d, yo) => crearPedido(db(), d, new Date(), yo.id));
+  // ── Salón: acomodar el plano es del dueño; atender las mesas, de cualquiera con sesión ──
+  manejar(CANALES.salonObtener, 'sesion', nada, () => salon.obtenerSalon(db()));
+  manejar(CANALES.salonCargarEjemplo, 'dueno', nada, (yo) => salon.cargarSalonEjemplo(db(), yo));
+  manejar(CANALES.zonaGuardar, 'dueno', z.tuple([esquemaZona]), (d) => salon.guardarZona(db(), d));
+  manejar(CANALES.zonaBaja, 'dueno', z.tuple([id]), (zonaId) => {
+    salon.darDeBajaZona(db(), zonaId);
+    return null;
+  });
+  manejar(CANALES.mesaGuardar, 'dueno', z.tuple([esquemaMesa]), (d) => salon.guardarMesa(db(), d));
+  manejar(CANALES.mesaMover, 'dueno', z.tuple([id, esquemaPosicion]), (mesaId, lugar) => {
+    salon.moverMesa(db(), mesaId, lugar);
+    return null;
+  });
+  manejar(CANALES.mesaBaja, 'dueno', z.tuple([id]), (mesaId) => {
+    salon.darDeBajaMesa(db(), mesaId);
+    return null;
+  });
+  manejar(CANALES.mesaAbrir, 'sesion', z.tuple([esquemaAbrirMesa]), (d, yo) => salon.abrirMesa(db(), d, yo));
+  manejar(CANALES.mesaCuenta, 'sesion', z.tuple([id]), (pedidoId) => obtenerPedido(db(), pedidoId));
+  manejar(CANALES.mesaRonda, 'sesion', z.tuple([id, esquemaRonda]), (pedidoId, d, yo) => salon.agregarRonda(db(), pedidoId, d, yo));
+  manejar(CANALES.mesaEditar, 'sesion', z.tuple([id, esquemaEditarCuenta]), (pedidoId, d) => {
+    salon.editarCuenta(db(), pedidoId, d);
+    return null;
+  });
+  manejar(CANALES.mesaPedirCuenta, 'sesion', z.tuple([id, z.boolean()]), (pedidoId, pedida) => {
+    salon.pedirCuenta(db(), pedidoId, pedida);
+    return null;
+  });
+  manejar(CANALES.mesaLiberar, 'sesion', z.tuple([id]), (pedidoId, yo) => {
+    salon.liberarMesa(db(), pedidoId, yo);
+    return null;
+  });
+
   // ── Clientes (cualquiera con sesión: el cajero también corrige direcciones) ──
   manejar(CANALES.clientesBuscar, 'sesion', z.tuple([esquemaBusqueda]), (texto) => buscarClientes(db(), texto));
   manejar(CANALES.clientesListar, 'sesion', z.tuple([esquemaListarClientes]), (filtro) => listarClientes(db(), filtro));
@@ -232,6 +273,22 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
     return { ruta: await guardarPdf(html, config.anchoPapel, `${nombre}.pdf`) };
   });
   manejar(CANALES.impresionImpresoras, 'dueno', nada, () => listarImpresoras());
+  manejar(
+    CANALES.impresionRonda,
+    'sesion',
+    z.tuple([id, z.number().int().min(1), z.enum(['impresora', 'pdf'])]),
+    async (pedidoId, ronda, destino) => {
+      const config = obtenerConfiguracion(db());
+      const pedido = obtenerPedido(db(), pedidoId);
+      const html = htmlComanda(pedido, config.anchoPapel, ronda);
+      if (!html) throw new ErrorDeUsuario(`La ronda ${ronda} no tiene nada para la cocina (solo bebidas o productos que no se preparan).`);
+      if (destino === 'pdf') {
+        const nombre = `${pedido.fecha}_mesa-${pedido.mesa}_ronda-${ronda}`.replace(/[^\w.-]+/g, '-');
+        return { impreso: false, ruta: await guardarPdf(html, config.anchoPapel, `${nombre}.pdf`) };
+      }
+      return { impreso: await imprimirHtml(html, config.anchoPapel, config.impresora), ruta: null };
+    },
+  );
 
   // ── Configuración y sistema ──
   manejar(CANALES.configuracionObtener, 'libre', nada, () => obtenerConfiguracion(db()));

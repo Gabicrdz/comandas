@@ -99,6 +99,17 @@ export interface ItemDetalle {
   nota: string;
   vaACocina: boolean;
   agregados: AgregadoDetalle[];
+  /** En una mesa: en qué ronda se pidió (1, 2, 3…). En los demás pedidos, 1. */
+  ronda: number;
+}
+
+/** Cada vez que una mesa pide algo más. */
+export interface RondaDetalle {
+  numero: number;
+  /** 'HH:MM' */
+  hora: string;
+  /** Quién la cargó (nombre), si se sabe. */
+  usuario: string | null;
 }
 
 export interface PagoDetalle {
@@ -128,14 +139,22 @@ export interface PedidoDetalle {
   motivoAnulacion: string;
   items: ItemDetalle[];
   pagos: PagoDetalle[];
+  // ── Solo en las cuentas de mesa del salón (null en los demás) ──
+  mesaId: number | null;
+  comensales: number | null;
+  mozoId: number | null;
+  mozo: string | null;
+  /** 'AAAA-MM-DD HH:MM:SS' en que pidieron la cuenta (null = no la pidieron). */
+  cuentaPedidaEn: string | null;
+  rondas: RondaDetalle[];
 }
 
 export type TipoImpresion = 'comanda' | 'ticket' | 'cierre';
 
 // ───────── Usuarios y caja ─────────
 
-export type Rol = 'dueno' | 'cajero';
-export const NOMBRE_ROL: Record<Rol, string> = { dueno: 'Dueño', cajero: 'Cajero' };
+export type Rol = 'dueno' | 'cajero' | 'mozo';
+export const NOMBRE_ROL: Record<Rol, string> = { dueno: 'Dueño', cajero: 'Cajero', mozo: 'Mozo' };
 
 /** Lo que se sabe de un usuario (nunca viaja el PIN ni su hash). */
 export interface Usuario {
@@ -313,3 +332,64 @@ export interface Reporte {
 }
 
 export type Respuesta<T> = { ok: true; datos: T } | { ok: false; error: string };
+
+// ───────── Salón (Comandas, etapa 1) ─────────
+
+export const FORMAS_MESA = ['cuadrada', 'redonda', 'larga'] as const;
+export type FormaMesa = (typeof FORMAS_MESA)[number];
+export const NOMBRE_FORMA: Record<FormaMesa, string> = { cuadrada: 'Cuadrada', redonda: 'Redonda', larga: 'Larga' };
+
+export interface Zona {
+  id: number;
+  nombre: string;
+  orden: number;
+}
+
+/** libre · ocupada (hay gente) · cuenta (pidieron la cuenta). */
+export type EstadoMesa = 'libre' | 'ocupada' | 'cuenta';
+
+/** Lo que se ve de la cuenta abierta de una mesa en el plano. */
+export interface CuentaDeMesa {
+  pedidoId: number;
+  numero: number;
+  comensales: number | null;
+  mozoId: number | null;
+  mozo: string | null;
+  /** 'AAAA-MM-DD HH:MM:SS' en que se abrió. */
+  abiertaEn: string;
+  totalCentavos: number;
+  unidades: number;
+  rondas: number;
+  /** 'AAAA-MM-DD HH:MM:SS' de la última ronda (null = todavía no pidieron nada). */
+  ultimaRondaEn: string | null;
+  cuentaPedidaEn: string | null;
+}
+
+export interface Mesa {
+  id: number;
+  zonaId: number;
+  nombre: string;
+  lugares: number;
+  forma: FormaMesa;
+  x: number;
+  y: number;
+  estado: EstadoMesa;
+  cuenta: CuentaDeMesa | null;
+}
+
+export interface Salon {
+  zonas: Zona[];
+  mesas: Mesa[];
+  /** Quiénes pueden atender mesas: mozos primero, después el resto del equipo. */
+  mozos: Usuario[];
+}
+
+export interface RondaAgregada {
+  ronda: number;
+  /** Lo que sumó esta ronda. */
+  rondaCentavos: number;
+  /** Cómo quedó la cuenta. */
+  totalCentavos: number;
+  /** true si algo de la ronda va a la cocina (para ofrecer imprimir la comanda). */
+  vaACocina: boolean;
+}

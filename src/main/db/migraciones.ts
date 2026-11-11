@@ -9,6 +9,14 @@
 export interface Migracion {
   nombre: string;
   sql: string;
+  /**
+   * true = la migración rearma una tabla (crear nueva, copiar, borrar la vieja
+   * y renombrar). Para eso hay que apagar un momento las claves foráneas: si no,
+   * SQLite no deja borrar una tabla que otras tablas referencian. conexion.ts
+   * las apaga, aplica el paso y revisa con foreign_key_check que no quede
+   * ninguna referencia rota antes de confirmar.
+   */
+  reconstruye?: boolean;
 }
 
 export const MIGRACIONES: Migracion[] = [
@@ -260,6 +268,81 @@ export const MIGRACIONES: Migracion[] = [
         ('direccion_local', ''),
         ('telefono_local', ''),
         ('pie_ticket', '¡Gracias por tu compra!');
+    `,
+  },
+  {
+    nombre: 'Salón: rol mozo, zonas, mesas y cuentas de mesa por rondas',
+    reconstruye: true,
+    sql: /* sql */ `
+      -- 1) Rol "mozo". SQLite no deja cambiar un CHECK con ALTER TABLE: se arma
+      --    la tabla nueva, se copian los usuarios (con los MISMOS id, así los
+      --    pedidos, pagos y cajas siguen apuntando a la persona correcta),
+      --    se borra la vieja y la nueva toma su nombre.
+      CREATE TABLE usuarios_nueva (
+        id         INTEGER PRIMARY KEY,
+        nombre     TEXT    NOT NULL,
+        rol        TEXT    NOT NULL CHECK (rol IN ('dueno', 'cajero', 'mozo')),
+        pin_hash   TEXT    NOT NULL,
+        pin_sal    TEXT    NOT NULL,
+        activo     INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
+        creado_en  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+      INSERT INTO usuarios_nueva (id, nombre, rol, pin_hash, pin_sal, activo, creado_en)
+        SELECT id, nombre, rol, pin_hash, pin_sal, activo, creado_en FROM usuarios;
+      DROP TABLE usuarios;
+      ALTER TABLE usuarios_nueva RENAME TO usuarios;
+      CREATE UNIQUE INDEX usuarios_nombre_unico ON usuarios (nombre COLLATE NOCASE) WHERE activo = 1;
+
+      -- 2) Zonas del local (Salón, Vereda, Patio…) y sus mesas.
+      CREATE TABLE zonas (
+        id         INTEGER PRIMARY KEY,
+        nombre     TEXT    NOT NULL,
+        orden      INTEGER NOT NULL DEFAULT 0,
+        activa     INTEGER NOT NULL DEFAULT 1 CHECK (activa IN (0, 1)),
+        creado_en  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+      CREATE UNIQUE INDEX zonas_nombre_unico ON zonas (nombre COLLATE NOCASE) WHERE activa = 1;
+      INSERT INTO zonas (nombre, orden) VALUES ('Salón', 1);
+
+      -- x, y = casillero del plano (columna y fila). Una mesa "larga" ocupa dos
+      -- casilleros a lo ancho. Que dos mesas no se pisen lo controla el main.
+      CREATE TABLE mesas (
+        id         INTEGER PRIMARY KEY,
+        zona_id    INTEGER NOT NULL REFERENCES zonas (id),
+        nombre     TEXT    NOT NULL,
+        lugares    INTEGER NOT NULL DEFAULT 4 CHECK (lugares BETWEEN 1 AND 30),
+        forma      TEXT    NOT NULL DEFAULT 'cuadrada' CHECK (forma IN ('cuadrada', 'redonda', 'larga')),
+        x          INTEGER NOT NULL CHECK (x >= 0),
+        y          INTEGER NOT NULL CHECK (y >= 0),
+        activa     INTEGER NOT NULL DEFAULT 1 CHECK (activa IN (0, 1)),
+        creado_en  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+      CREATE UNIQUE INDEX mesas_nombre_unico ON mesas (nombre COLLATE NOCASE) WHERE activa = 1;
+      CREATE INDEX mesas_por_zona ON mesas (zona_id);
+
+      -- 3) La cuenta de una mesa es UN pedido tipo 'mesa' que queda abierto
+      --    (sin cobrar) mientras la gente está sentada. Cada vez que piden algo
+      --    más se suma una "ronda" a ese mismo pedido.
+      ALTER TABLE pedidos ADD COLUMN mesa_id INTEGER REFERENCES mesas (id);
+      ALTER TABLE pedidos ADD COLUMN comensales INTEGER CHECK (comensales IS NULL OR comensales BETWEEN 1 AND 99);
+      ALTER TABLE pedidos ADD COLUMN mozo_id INTEGER REFERENCES usuarios (id);
+      ALTER TABLE pedidos ADD COLUMN cuenta_pedida_en TEXT;
+      -- Una mesa tiene como mucho UNA cuenta abierta (índice único parcial,
+      -- como "una sola caja abierta"): segunda línea de defensa si dos personas
+      -- abren la misma mesa al mismo tiempo.
+      CREATE UNIQUE INDEX una_cuenta_por_mesa ON pedidos (mesa_id)
+        WHERE mesa_id IS NOT NULL AND cobrado = 0 AND estado <> 'anulado';
+
+      ALTER TABLE pedido_items ADD COLUMN ronda INTEGER NOT NULL DEFAULT 1 CHECK (ronda >= 1);
+
+      CREATE TABLE rondas (
+        id          INTEGER PRIMARY KEY,
+        pedido_id   INTEGER NOT NULL REFERENCES pedidos (id),
+        numero      INTEGER NOT NULL CHECK (numero >= 1),
+        creada_en   TEXT    NOT NULL,             -- 'AAAA-MM-DD HH:MM:SS'
+        usuario_id  INTEGER REFERENCES usuarios (id),
+        UNIQUE (pedido_id, numero)
+      );
     `,
   },
 ];

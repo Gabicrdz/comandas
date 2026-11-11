@@ -22,7 +22,8 @@ import { TarjetaLocal } from './tarjeta-local';
 
 const PERMISOS: Record<Rol, string> = {
   dueno: 'Todo: menú, precios, anular pedidos, retiros, usuarios y reportes.',
-  cajero: 'Vende, cobra, mueve pedidos, marca agotados y abre o cierra la caja.',
+  cajero: 'Vende, cobra, atiende el salón, mueve pedidos y abre o cierra la caja.',
+  mozo: 'Atiende mesas. No entra a la PC: usa su PIN en el celular (próxima etapa).',
 };
 
 export function PaginaAjustes() {
@@ -176,8 +177,8 @@ function DialogoUsuario({ abierto, usuario, alCerrar }: { abierto: boolean; usua
             </Campo>
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-2 text-sm font-semibold">Rol</legend>
-              <div role="radiogroup" aria-label="Rol" className="grid grid-cols-2 gap-2">
-                {(['cajero', 'dueno'] as const).map((r) => (
+              <div role="radiogroup" aria-label="Rol" className="grid grid-cols-3 gap-2">
+                {(['mozo', 'cajero', 'dueno'] as const).map((r) => (
                   <button
                     key={r}
                     type="button"

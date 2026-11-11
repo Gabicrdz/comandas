@@ -145,6 +145,15 @@ export const esquemaPagos = z
   .max(5, 'Hasta 5 pagos por pedido.');
 export type DatosPagos = z.input<typeof esquemaPagos>;
 
+/** Un renglón: QUÉ se pide (los precios los calcula el main). */
+export const esquemaItemPedido = z.object({
+  productoId: id,
+  varianteId: id.nullable(),
+  opcionesIds: z.array(id).max(30),
+  cantidad: z.number().int().min(1, 'La cantidad mínima es 1.').max(99, 'La cantidad máxima es 99.'),
+  nota: textoOpcional(80),
+});
+
 export const esquemaPedido = z
   .object({
     tipo: z.enum(['mostrador', 'llevar', 'delivery', 'mesa']),
@@ -160,15 +169,7 @@ export const esquemaPedido = z
     nota: textoOpcional(140),
     envioCentavos: precio.default(0),
     items: z
-      .array(
-        z.object({
-          productoId: id,
-          varianteId: id.nullable(),
-          opcionesIds: z.array(id).max(30),
-          cantidad: z.number().int().min(1, 'La cantidad mínima es 1.').max(99, 'La cantidad máxima es 99.'),
-          nota: textoOpcional(80),
-        }),
-      )
+      .array(esquemaItemPedido)
       .min(1, 'El pedido está vacío.')
       .max(100, 'Un pedido tiene hasta 100 renglones.'),
     /** Vacío = se guarda para cobrar después. */
@@ -213,7 +214,7 @@ export const esquemaPin = z
 export const esquemaUsuario = z.object({
   id: id.optional(),
   nombre: texto('el nombre', 30),
-  rol: z.enum(['dueno', 'cajero']),
+  rol: z.enum(['dueno', 'cajero', 'mozo']),
   /** Obligatorio al crear; al editar, vacío = no cambiar el PIN. */
   pin: z.union([esquemaPin, z.literal('')]).default(''),
 });
@@ -286,3 +287,53 @@ export const esquemaLocal = z.object({
   envioCentavos: z.number().int().min(0, 'El envío no puede ser negativo.').max(PRECIO_MAXIMO),
 });
 export type DatosLocal = z.input<typeof esquemaLocal>;
+
+// ---------- Salón (Comandas, etapa 1) ----------
+/**
+ * El plano de cada zona es una grilla de 10 columnas × 6 filas: con eso entra
+ * un salón de unas 25 mesas y cada casillero se ve bien hasta en 1366 × 768.
+ */
+export const COLUMNAS_SALON = 10;
+export const FILAS_SALON = 6;
+
+export const esquemaZona = z.object({
+  id: id.optional(),
+  nombre: texto('el nombre de la zona', 24),
+});
+export type DatosZona = z.input<typeof esquemaZona>;
+
+export const esquemaMesa = z.object({
+  id: id.optional(),
+  zonaId: id,
+  nombre: z
+    .string()
+    .trim()
+    .min(1, 'Poné el nombre o número de la mesa.')
+    .max(6, 'El nombre de la mesa tiene hasta 6 caracteres (por ejemplo "12" o "B3").'),
+  lugares: z.number().int().min(1, 'Al menos 1 lugar.').max(30, 'Hasta 30 lugares.'),
+  forma: z.enum(['cuadrada', 'redonda', 'larga']),
+});
+export type DatosMesa = z.input<typeof esquemaMesa>;
+
+export const esquemaPosicion = z.object({
+  x: z.number().int().min(0).max(COLUMNAS_SALON - 1),
+  y: z.number().int().min(0).max(FILAS_SALON - 1),
+});
+
+export const esquemaAbrirMesa = z.object({
+  mesaId: id,
+  comensales: z.number().int().min(1, 'Al menos 1 persona.').max(99, 'Hasta 99 personas.'),
+  /** null = sin mozo asignado (locales chicos donde atiende el que cobra). */
+  mozoId: id.nullable(),
+});
+export type DatosAbrirMesa = z.input<typeof esquemaAbrirMesa>;
+
+export const esquemaEditarCuenta = esquemaAbrirMesa.omit({ mesaId: true });
+export type DatosEditarCuenta = z.input<typeof esquemaEditarCuenta>;
+
+export const esquemaRonda = z.object({
+  items: z.array(esquemaItemPedido).min(1, 'La ronda está vacía.').max(60, 'Una ronda tiene hasta 60 renglones.'),
+  /** Lo que vio la persona: si el menú cambió mientras cargaba, no coincide. */
+  totalEsperadoCentavos: z.number().int().min(0),
+});
+export type DatosRonda = z.input<typeof esquemaRonda>;
