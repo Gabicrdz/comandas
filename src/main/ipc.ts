@@ -32,10 +32,11 @@ import {
   esquemaPosicion,
   esquemaRonda,
   esquemaZona,
+  esquemaRed,
 } from '@compartido/esquemas';
-import type { Configuracion, Respuesta, Usuario } from '@compartido/tipos';
+import type { Cambio, Configuracion, Respuesta, Usuario } from '@compartido/tipos';
 import { obtenerDb } from './db/conexion';
-import { ErrorDeUsuario } from './servicios/errores';
+import { ErrorDeUsuario, mensajeDeError } from './servicios/errores';
 import * as menu from './servicios/menu';
 import { cargarMenuDeEjemplo } from './servicios/menu-ejemplo';
 import {
@@ -47,7 +48,9 @@ import {
   obtenerPedido,
   resumenDelDia,
 } from './servicios/pedidos';
-import { guardarImpresion, guardarLocal, obtenerConfiguracion } from './servicios/configuracion';
+import { guardarImpresion, guardarLocal, guardarRed, obtenerConfiguracion } from './servicios/configuracion';
+import { avisarCambio } from './red/avisos';
+import { sinRed, type ControlRed } from './red/control';
 import { cargarDemo, hayPedidos } from './servicios/demo';
 import { abrirCarpetaCopias, elegirCopia, estadoCopias, exportarCopia, restaurarCopiaElegida } from './copias';
 import { darDeBajaUsuario, guardarUsuario, hayUsuarios, listarUsuarios } from './servicios/usuarios';
@@ -59,15 +62,7 @@ import { htmlCierre, htmlComanda, htmlImpresion } from './impresion/plantillas';
 import * as salon from './servicios/salon';
 import { guardarPdf, imprimirHtml, listarImpresoras } from './impresion/imprimir';
 
-/** Convierte cualquier error en un mensaje para la ventana. */
-export function mensajeDeError(error: unknown): string {
-  if (error instanceof ErrorDeUsuario) return error.message;
-  if (error instanceof z.ZodError) {
-    return error.issues[0]?.message ?? 'Hay datos inválidos.';
-  }
-  console.error(error);
-  return 'Ocurrió un error inesperado. Si se repite, avisale a quien te instaló el sistema.';
-}
+export { mensajeDeError };
 
 /**
  * Quién puede usar cada canal:
@@ -97,11 +92,25 @@ export function manejar<E extends ZodType<unknown[]>, T>(
     try {
       const usuario = controlar(permiso);
       const validados = esquema.parse(args) as z.output<E>;
-      return { ok: true, datos: await fn(...validados, usuario as Usuario) };
+      const datos = await fn(...validados, usuario as Usuario);
+      // Si el canal cambió algo que ven otros (salón, menú), se avisa a la
+      // ventana y a los celulares para que se actualicen al instante.
+      const aviso = avisoDe(canal);
+      if (aviso) avisarCambio(aviso);
+      return { ok: true, datos };
     } catch (error) {
       return { ok: false, error: mensajeDeError(error) };
     }
   });
+}
+
+/** Qué aviso dispara cada canal cuando sale bien (los que solo leen, ninguno). */
+function avisoDe(canal: string): Cambio | null {
+  const soloLeen: string[] = [CANALES.salonObtener, CANALES.mesaCuenta, CANALES.menuObtener];
+  if (soloLeen.includes(canal)) return null;
+  if (/^(salon|pedidos|usuarios):/.test(canal) && !/resumen|listar|para-ingresar/.test(canal)) return { tipo: 'salon' };
+  if (/^(menu|categorias|productos|grupos):/.test(canal)) return { tipo: 'menu' };
+  return null;
 }
 
 const nada = z.tuple([]);
@@ -126,7 +135,7 @@ function documentoDe(idDocumento: number, tipo: 'comanda' | 'ticket' | 'cierre')
   return { html, nombre: `${pedido.fecha}_pedido-${pedido.numero}_${tipo}`, config };
 }
 
-export function registrarCanales(info: () => { version: string; baseDeDatos: string }): void {
+export function registrarCanales(info: () => { version: string; baseDeDatos: string }, red: ControlRed = sinRed): void {
   const db = () => obtenerDb();
   const sinDatos = () => null;
 
@@ -310,4 +319,11 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
     return sinDatos();
   });
   manejar(CANALES.sistemaInfo, 'libre', nada, info);
+
+  // ── Mozos con celular (servidor de la red local) ──
+  manejar(CANALES.redEstado, 'sesion', nada, () => red.estado());
+  manejar(CANALES.redConfigurar, 'dueno', z.tuple([esquemaRed]), async (d) => {
+    guardarRed(db(), d);
+    return red.aplicar();
+  });
 }

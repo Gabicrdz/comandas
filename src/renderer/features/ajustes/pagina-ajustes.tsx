@@ -19,11 +19,12 @@ import { useUsuario } from '@/features/sesion/consultas';
 import { TarjetaCopias } from './tarjeta-copias';
 import { TarjetaDemo } from './tarjeta-demo';
 import { TarjetaLocal } from './tarjeta-local';
+import { TarjetaRed } from './tarjeta-red';
 
 const PERMISOS: Record<Rol, string> = {
   dueno: 'Todo: menú, precios, anular pedidos, retiros, usuarios y reportes.',
   cajero: 'Vende, cobra, atiende el salón, mueve pedidos y abre o cierra la caja.',
-  mozo: 'Atiende mesas. No entra a la PC: usa su PIN en el celular (próxima etapa).',
+  mozo: 'Atiende mesas desde su celular (Ajustes → Mozos con celular). No entra a la PC.',
 };
 
 export function PaginaAjustes() {
@@ -47,7 +48,7 @@ export function PaginaAjustes() {
     <div className="mx-auto flex max-w-[900px] flex-col gap-8 px-8 pt-7 pb-12">
       <header>
         <h1 className="font-display text-[34px] leading-none font-semibold tracking-tight">Ajustes</h1>
-        <p className="mt-2 text-tinta-suave">Tu local, usuarios, impresión y copias de seguridad.</p>
+        <p className="mt-2 text-tinta-suave">Tu local, usuarios, mozos con celular, impresión y copias de seguridad.</p>
       </header>
 
       <TarjetaLocal />
@@ -112,6 +113,7 @@ export function PaginaAjustes() {
         </Button>
       </section>
 
+      <TarjetaRed />
       <TarjetaCopias />
       <TarjetaDemo />
       <AcercaDe />

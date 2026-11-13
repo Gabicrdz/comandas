@@ -17,6 +17,7 @@ import { PaginaCaja } from '@/features/caja/pagina-caja';
 import { PaginaAjustes } from '@/features/ajustes/pagina-ajustes';
 import { PantallaIngreso } from '@/features/sesion/pantalla-ingreso';
 import { CLAVE_SESION, useSesion, useUsuario } from '@/features/sesion/consultas';
+import { useAvisosEnVivo } from '@/features/salon/avisos';
 import type { ReactNode } from 'react';
 import './index.css';
 
@@ -56,6 +57,9 @@ function Raiz() {
     window.addEventListener('sesion-cerrada', revisar);
     return () => window.removeEventListener('sesion-cerrada', revisar);
   }, [cliente]);
+  // Los avisos del main (por ejemplo, un mozo que mandó una ronda) se escuchan
+  // solo con alguien adentro.
+  useAvisosEnVivo(Boolean(sesion.data));
   if (sesion.isPending) return null;
   if (!sesion.data) return <PantallaIngreso />;
   return <RouterProvider router={router} />;

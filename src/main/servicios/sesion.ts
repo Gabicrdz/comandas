@@ -12,7 +12,12 @@ const MAXIMO_INTENTOS = 5;
 const ESPERA_MS = 30_000;
 const fallos = new Map<number, { cantidad: number; hasta: number }>();
 
-export function iniciarSesion(db: BaseDeDatos, usuarioId: number, pin: string, ahora: number = Date.now()): Usuario {
+/**
+ * Revisa un PIN contando los intentos fallidos (5 mal → 30 segundos de espera).
+ * La usan la PC (iniciarSesion) y los celulares de los mozos (red/mozos.ts):
+ * así nadie puede probar PINs a lo loco desde ningún lado.
+ */
+export function comprobarPin(db: BaseDeDatos, usuarioId: number, pin: string, ahora: number = Date.now()): Usuario {
   const registro = fallos.get(usuarioId) ?? { cantidad: 0, hasta: 0 };
   if (registro.hasta > ahora) {
     const segundos = Math.ceil((registro.hasta - ahora) / 1000);
@@ -27,6 +32,11 @@ export function iniciarSesion(db: BaseDeDatos, usuarioId: number, pin: string, a
     throw new ErrorDeUsuario(bloqueado ? 'PIN incorrecto. Esperá 30 segundos para volver a probar.' : 'PIN incorrecto.');
   }
   fallos.delete(usuarioId);
+  return usuario;
+}
+
+export function iniciarSesion(db: BaseDeDatos, usuarioId: number, pin: string, ahora: number = Date.now()): Usuario {
+  const usuario = comprobarPin(db, usuarioId, pin, ahora);
   if (usuario.rol === 'mozo') {
     throw new ErrorDeUsuario('Los mozos trabajan desde el celular: la PC es para la caja y el dueño.');
   }

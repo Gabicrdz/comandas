@@ -21,6 +21,16 @@ function politicaDeSeguridad(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), politicaDeSeguridad()],
+  build: {
+    // Dos páginas en el mismo armado: la ventana de la PC (index.html) y la app
+    // de los mozos (mozo.html), que la PC les sirve a los celulares por la red.
+    rollupOptions: {
+      input: {
+        principal: fileURLToPath(new URL('./index.html', import.meta.url)),
+        mozo: fileURLToPath(new URL('./mozo.html', import.meta.url)),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src/renderer', import.meta.url)),

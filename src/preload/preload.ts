@@ -103,6 +103,20 @@ const api: ApiCaja = {
   sistema: {
     info: () => pedir(CANALES.sistemaInfo),
   },
+  red: {
+    estado: () => pedir(CANALES.redEstado),
+    configurar: (datos) => pedir(CANALES.redConfigurar, datos),
+  },
+  // Al revés que los demás: acá habla el MAIN y la ventana escucha
+  // (webContents.send → ipcRenderer.on), como el "guardar antes de cerrar"
+  // del bloc de notas.
+  alCambiar: (fn) => {
+    const oyente = (_evento: unknown, cambio: Parameters<typeof fn>[0]) => fn(cambio);
+    ipcRenderer.on('cambio', oyente);
+    return () => {
+      ipcRenderer.removeListener('cambio', oyente);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('caja', api);

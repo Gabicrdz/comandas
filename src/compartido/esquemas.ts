@@ -337,3 +337,23 @@ export const esquemaRonda = z.object({
   totalEsperadoCentavos: z.number().int().min(0),
 });
 export type DatosRonda = z.input<typeof esquemaRonda>;
+
+// ---------- Red local (Comandas, etapa 2) ----------
+export const esquemaRed = z.object({
+  activa: z.boolean(),
+  puerto: z
+    .number({ error: 'Escribí el número de puerto.' })
+    .int('El puerto es un número entero.')
+    .min(1024, 'Usá un puerto entre 1024 y 65535 (por ejemplo 3000).')
+    .max(65535, 'Usá un puerto entre 1024 y 65535 (por ejemplo 3000).'),
+});
+export type DatosRed = z.input<typeof esquemaRed>;
+
+export const esquemaIngresoMozo = z.object({ usuarioId: id, pin: z.string().max(10) });
+
+/** Desde el celular el mozo no elige mozo: si no viene, es él. */
+export const esquemaAbrirMesaCelular = z.object({
+  comensales: z.number().int().min(1, 'Al menos 1 persona.').max(99, 'Hasta 99 personas.'),
+});
+
+export const esquemaPedirCuenta = z.object({ pedida: z.boolean() });

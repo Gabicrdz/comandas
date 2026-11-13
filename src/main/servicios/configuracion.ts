@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { configuracion } from '../db/esquema';
-import type { esquemaImpresion, esquemaLocal } from '@compartido/esquemas';
+import type { esquemaImpresion, esquemaLocal, esquemaRed } from '@compartido/esquemas';
 import type { BaseDeDatos } from '../db/conexion';
 import type { Configuracion } from '@compartido/tipos';
 
@@ -21,6 +21,9 @@ export function obtenerConfiguracion(db: BaseDeDatos): Configuracion {
     envioCentavos: Number(valores.get('envio_centavos') ?? 0),
     impresora: valores.get('impresora') ?? '',
     anchoPapel: valores.get('ancho_papel') === '58' ? 58 : 80,
+    // Las claves nuevas no necesitan migración: si no están, valen lo de acá.
+    redActiva: valores.get('red_activa') === '1',
+    redPuerto: Number(valores.get('red_puerto') ?? 3000),
   };
 }
 
@@ -47,5 +50,13 @@ export function guardarLocal(db: BaseDeDatos, datos: z.output<typeof esquemaLoca
     guardar(db, 'telefono_local', datos.telefonoLocal);
     guardar(db, 'pie_ticket', datos.pieTicket);
     guardar(db, 'envio_centavos', String(datos.envioCentavos));
+  });
+}
+
+/** Mozos con celular: prendido o apagado, y en qué puerto escucha. */
+export function guardarRed(db: BaseDeDatos, datos: z.output<typeof esquemaRed>): void {
+  db.transaction(() => {
+    guardar(db, 'red_activa', datos.activa ? '1' : '0');
+    guardar(db, 'red_puerto', String(datos.puerto));
   });
 }

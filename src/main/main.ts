@@ -2,9 +2,15 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import { abrirBaseDeDatos, cerrarBaseDeDatos, rutaBaseDeDatos } from './db/conexion';
+import { abrirBaseDeDatos, cerrarBaseDeDatos, obtenerDb, rutaBaseDeDatos } from './db/conexion';
 import { registrarCanales } from './ipc';
 import { copiaAlIniciar } from './copias';
+import { crearControlRed } from './red/control';
+import { escucharCambios } from './red/avisos';
+import { obtenerConfiguracion } from './servicios/configuracion';
+import { obtenerPedido } from './servicios/pedidos';
+import { htmlComanda } from './impresion/plantillas';
+import { imprimirHtml } from './impresion/imprimir';
 
 // Instalador de Windows: crea/borra accesos directos y se cierra.
 if (started) app.quit();
@@ -67,12 +73,40 @@ app.on('second-instance', () => {
   ventana?.focus();
 });
 
+// El servidor de los celulares. La app del mozo (mozo.html) se arma junto con la
+// ventana: en desarrollo la sirve Vite; instalada, está en la carpeta del renderer.
+const red = crearControlRed({
+  obtenerDb,
+  carpetaApp: MAIN_WINDOW_VITE_DEV_SERVER_URL ? null : path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`),
+  urlDesarrollo: MAIN_WINDOW_VITE_DEV_SERVER_URL ?? null,
+});
+
+/**
+ * Cuando un mozo manda una ronda desde el celular y hay una impresora elegida
+ * en Ajustes, la comanda sale sola (sin diálogo). Si no hay impresora, la PC
+ * muestra el aviso con el botón "Imprimir comanda".
+ */
+async function imprimirRondaDelCelular(pedidoId: number, ronda: number): Promise<void> {
+  const config = obtenerConfiguracion(obtenerDb());
+  if (!config.impresora) return;
+  const html = htmlComanda(obtenerPedido(obtenerDb(), pedidoId), config.anchoPapel, ronda);
+  if (html) await imprimirHtml(html, config.anchoPapel, config.impresora);
+}
+
 app.whenReady().then(() => {
   if (!esLaUnica) return;
   if (app.isPackaged) Menu.setApplicationMenu(null);
   abrirBaseDeDatos(path.join(app.getPath('userData'), 'comandas.db'));
-  registrarCanales(() => ({ version: app.getVersion(), baseDeDatos: rutaBaseDeDatos() }));
+  registrarCanales(() => ({ version: app.getVersion(), baseDeDatos: rutaBaseDeDatos() }), red);
   crearVentana();
+  // Todo aviso de cambio también le llega a la ventana de la PC.
+  escucharCambios((cambio) => {
+    ventana?.webContents.send('cambio', cambio);
+    if (cambio.tipo === 'ronda' && cambio.origen === 'celular' && cambio.vaACocina) {
+      imprimirRondaDelCelular(cambio.pedidoId, cambio.ronda).catch((e: unknown) => console.error('No se pudo imprimir la comanda:', e));
+    }
+  });
+  void red.aplicar(); // si en Ajustes está prendido, arranca el servidor
   void copiaAlIniciar(); // una copia por día, sin frenar la apertura
   // Muchos locales dejan la caja abierta días enteros: revisamos cada hora
   // si ya cambió el día y hace falta la copia nueva.
@@ -80,4 +114,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
-app.on('will-quit', () => cerrarBaseDeDatos());
+app.on('will-quit', () => {
+  void red.detener();
+  cerrarBaseDeDatos();
+});

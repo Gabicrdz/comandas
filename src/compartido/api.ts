@@ -19,6 +19,7 @@ import type {
   DatosMesa,
   DatosRonda,
   DatosZona,
+  DatosRed,
 } from './esquemas';
 import type {
   Caja,
@@ -37,6 +38,8 @@ import type {
   Respuesta,
   RondaAgregada,
   Salon,
+  Cambio,
+  EstadoRed,
   ResumenCaja,
   ResumenDelDia,
   TipoImpresion,
@@ -160,6 +163,17 @@ export interface ApiCaja {
   sistema: {
     info(): Promise<Respuesta<{ version: string; baseDeDatos: string }>>;
   };
+  /** Mozos con celular: el servidor de la red local. */
+  red: {
+    estado(): Promise<Respuesta<EstadoRed>>;
+    /** Solo el dueño: prender/apagar y elegir el puerto. */
+    configurar(datos: DatosRed): Promise<Respuesta<EstadoRed>>;
+  };
+  /**
+   * El main avisa cuando algo cambió (por ejemplo, un mozo mandó una ronda
+   * desde el celular). Devuelve la función para dejar de escuchar.
+   */
+  alCambiar(fn: (cambio: Cambio) => void): () => void;
 }
 
 /** Nombre de cada canal IPC: "seccion:accion". */
@@ -229,4 +243,6 @@ export const CANALES = {
   demoDisponible: 'demo:disponible',
   demoCargar: 'demo:cargar',
   sistemaInfo: 'sistema:info',
+  redEstado: 'red:estado',
+  redConfigurar: 'red:configurar',
 } as const;

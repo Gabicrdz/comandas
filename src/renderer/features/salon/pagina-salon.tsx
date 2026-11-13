@@ -1,7 +1,8 @@
 // Pantalla Salón: el plano de cada zona a la izquierda y, a la derecha, lo
 // que pasa en la mesa elegida (o el resumen de todo el salón).
 import { useEffect, useState } from 'react';
-import { Lock, Map as Mapa, Move, Plus, Sparkles } from 'lucide-react';
+import { Link } from 'react-router';
+import { Lock, Map as Mapa, Move, Plus, Smartphone, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Mesa, PedidoDetalle } from '@compartido/tipos';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import { Plano } from './plano';
 import { PanelCuenta, PanelLibre, PanelResumen } from './panel-mesa';
 import { DialogoRonda } from './dialogo-ronda';
 import { DialogoMesa, DialogoZonas } from './dialogos-plano';
+import { useEstadoRed } from '@/features/ajustes/tarjeta-red';
 
 export function PaginaSalon() {
   const salon = useSalon();
@@ -25,6 +27,7 @@ export function PaginaSalon() {
   const { esDueno } = useUsuario();
   const cajaActual = useCajaActual();
   const cajaCerrada = cajaActual.isSuccess && cajaActual.data === null;
+  const red = useEstadoRed();
 
   const [zonaId, setZonaId] = useState<number | null>(null);
   const [elegidaId, setElegidaId] = useState<number | null>(null);
@@ -174,6 +177,9 @@ export function PaginaSalon() {
                 <Referencia clase="bg-mostaza" texto={`${conteo.cuenta} ${conteo.cuenta === 1 ? 'pide' : 'piden'} la cuenta`} />
               </ul>
             )}
+            {red.data?.funcionando && !acomodando && (
+              <Chip conectados={red.data.conectados} enlace={esDueno} />
+            )}
             {esDueno && !acomodando && (
               <Button
                 variant="outline"
@@ -286,5 +292,24 @@ function Referencia({ clase, texto }: { clase: string; texto: string }) {
       <span aria-hidden="true" className={cn('size-3.5 rounded', clase)} />
       {texto}
     </li>
+  );
+}
+
+/** Cuántos celulares de mozos están conectados (con link a Ajustes para el dueño). */
+function Chip({ conectados, enlace }: { conectados: number; enlace: boolean }) {
+  const contenido = (
+    <>
+      <Smartphone className="size-4" />
+      {conectados === 1 ? '1 celular' : `${conectados} celulares`}
+    </>
+  );
+  const clase =
+    'flex h-9 items-center gap-1.5 rounded-full bg-secondary px-3 text-[13px] font-semibold text-tinta-suave outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25';
+  return enlace ? (
+    <Link to="/ajustes" title="Mozos con celular" className={cn(clase, 'hover:text-tinta')}>
+      {contenido}
+    </Link>
+  ) : (
+    <span className={clase}>{contenido}</span>
   );
 }

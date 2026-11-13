@@ -243,6 +243,9 @@ export interface Configuracion {
   /** Nombre de la impresora de tickets; '' = preguntar cada vez (diálogo de Windows). */
   impresora: string;
   anchoPapel: 58 | 80;
+  /** Mozos con celular: si el servidor de la red local tiene que arrancar al abrir. */
+  redActiva: boolean;
+  redPuerto: number;
 }
 
 /** Toda respuesta del main tiene esta forma (igual que en los proyectos anteriores). */
@@ -392,4 +395,43 @@ export interface RondaAgregada {
   totalCentavos: number;
   /** true si algo de la ronda va a la cocina (para ofrecer imprimir la comanda). */
   vaACocina: boolean;
+}
+
+// ───────── Red local (Comandas, etapa 2) ─────────
+
+/**
+ * Lo que el main AVISA cuando algo cambia, a la ventana de la PC y a los
+ * celulares, para que vuelvan a pedir los datos al instante.
+ */
+export type Cambio =
+  | { tipo: 'salon' }
+  | { tipo: 'menu' }
+  | {
+      tipo: 'ronda';
+      origen: 'pc' | 'celular';
+      pedidoId: number;
+      ronda: number;
+      mesa: string;
+      quien: string;
+      vaACocina: boolean;
+    }
+  | { tipo: 'cuenta'; origen: 'pc' | 'celular'; mesa: string; quien: string };
+
+export interface EstadoRed {
+  activa: boolean;
+  puerto: number;
+  /** true = está escuchando y los celulares pueden entrar. */
+  funcionando: boolean;
+  /** Direcciones de esta PC en la red del local: http://<dirección>:<puerto> */
+  direcciones: string[];
+  /** Por qué no pudo arrancar (puerto ocupado, etc.). */
+  error: string | null;
+  /** Celulares conectados ahora. */
+  conectados: number;
+}
+
+/** Lo que recibe un celular al entrar con su PIN. */
+export interface IngresoMozo {
+  token: string;
+  usuario: Usuario;
 }
