@@ -491,6 +491,8 @@ export interface RondaAgregada {
   totalCentavos: number;
   /** true si algo de la ronda va a la cocina (para ofrecer imprimir la comanda). */
   vaACocina: boolean;
+  /** true si esta ronda ya había llegado antes (reintento del celular): no se cargó de nuevo. */
+  repetida?: boolean;
 }
 
 // ───────── Red local (Comandas, etapa 2) ─────────

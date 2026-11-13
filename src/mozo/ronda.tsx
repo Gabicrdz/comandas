@@ -2,7 +2,7 @@
 // pantalla chica una lista se toca mejor que una grilla), el armado con
 // tamaños y agregados (el mismo diálogo de la PC) y la barra de abajo para
 // revisar y mandar.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp, Search, Send, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Producto } from '@compartido/tipos';
@@ -18,12 +18,49 @@ import { useMandarRonda, useMenu, useSalon } from './consultas';
 
 let contador = 0;
 
+// ── Borrador: si el celular recarga la página o se queda sin batería a mitad de
+// una ronda, lo cargado no se pierde. Se guarda por cuenta y se borra al mandar. ──
+const claveBorrador = (pedidoId: number) => `comandas-borrador-${pedidoId}`;
+
+function leerBorrador(pedidoId: number): ItemCarrito[] {
+  try {
+    const crudo = localStorage.getItem(claveBorrador(pedidoId));
+    const items = crudo ? (JSON.parse(crudo) as ItemCarrito[]) : [];
+    if (!Array.isArray(items)) return [];
+    for (const i of items) contador = Math.max(contador, Number(String(i.clave).slice(1)) || 0);
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+function guardarBorrador(pedidoId: number, items: ItemCarrito[]): void {
+  try {
+    if (items.length === 0) localStorage.removeItem(claveBorrador(pedidoId));
+    else localStorage.setItem(claveBorrador(pedidoId), JSON.stringify(items));
+  } catch {
+    // sin almacenamiento: el borrador queda solo en pantalla
+  }
+}
+
+/** Una clave al azar para cada "Mandar" (crypto.randomUUID no existe en páginas http). */
+function nuevaClaveDeEnvio(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export function PantallaRonda({ mesaId, alTerminar }: { mesaId: number; alTerminar: () => void }) {
   const salon = useSalon();
   const menu = useMenu();
   const mandar = useMandarRonda();
   const mesa = salon.data?.mesas.find((m) => m.id === mesaId);
-  const [items, setItems] = useState<ItemCarrito[]>([]);
+  const pedidoIdDeLaCuenta = mesa?.cuenta?.pedidoId ?? null;
+  const [items, setItems] = useState<ItemCarrito[]>(() => (pedidoIdDeLaCuenta === null ? [] : leerBorrador(pedidoIdDeLaCuenta)));
+  // La clave de envío vale para ESTE contenido: si el mozo lo cambia, se genera otra.
+  const claveDeEnvio = useRef<string | null>(null);
+  useEffect(() => {
+    claveDeEnvio.current = null;
+    if (pedidoIdDeLaCuenta !== null) guardarBorrador(pedidoIdDeLaCuenta, items);
+  }, [items, pedidoIdDeLaCuenta]);
   const [categoria, setCategoria] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState('');
   const [armando, setArmando] = useState<{ producto: Producto; editando: ItemCarrito | null } | null>(null);
@@ -66,21 +103,24 @@ export function PantallaRonda({ mesaId, alTerminar }: { mesaId: number; alTermin
   }
 
   function enviar() {
+    claveDeEnvio.current ??= nuevaClaveDeEnvio();
     mandar.mutate(
       {
         pedidoId: cuenta.pedidoId,
         datos: {
           items: items.map(({ productoId, varianteId, opcionesIds, cantidad, nota }) => ({ productoId, varianteId, opcionesIds, cantidad, nota })),
           totalEsperadoCentavos: totales.totalCentavos,
+          claveEnvio: claveDeEnvio.current,
         },
       },
       {
         onSuccess: (r) => {
+          guardarBorrador(cuenta.pedidoId, []);
           toast.success(`Ronda ${r.ronda} mandada a la mesa ${mesa!.nombre}`, { description: `La cuenta va ${pesos(r.totalCentavos)}` });
           setRevisando(false);
           alTerminar();
         },
-        onError: (e) => toast.error(e.message),
+        onError: (e) => toast.error(e.message, { description: 'Lo que cargaste sigue acá: tocá Mandar de nuevo cuando vuelva la conexión.' }),
       },
     );
   }

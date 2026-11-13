@@ -12,6 +12,7 @@ import { TecladoPin } from '@/features/sesion/teclado-pin';
 import { cn } from '@/lib/utils';
 import { useAhora } from '@/features/salon/consultas';
 import { crearCliente, SESION_VENCIDA } from '../mozo/api';
+import { conectarEventos } from '../mozo/eventos';
 
 const { pedir, tokenGuardado, guardarToken } = crearCliente('comandas-cocina-token', '/api/cocina/ingresar');
 type Filtro = Sector | 'todos';
@@ -83,31 +84,37 @@ function sonar(): void {
 function useEventosCocina(): boolean {
   const cliente = useQueryClient();
   const [conectado, setConectado] = useState(true);
-  const [intento, setIntento] = useState(0);
   useEffect(() => {
     const token = tokenGuardado();
     if (!token) return;
-    const fuente = new EventSource(`/api/eventos?token=${encodeURIComponent(token)}`);
-    let reintento: number | undefined;
     const refrescar = () => void cliente.invalidateQueries({ queryKey: ['comandas'] });
-    fuente.addEventListener('hola', () => {
-      setConectado(true);
-      refrescar();
+    return conectarEventos({
+      token,
+      alConectar: refrescar,
+      alCambio: refrescar,
+      alEstado: setConectado,
+      alPerderla: () => void pedir('/api/cocina/comandas').catch(() => undefined), // si el PIN venció, vuelve al ingreso
     });
-    fuente.addEventListener('cambio', refrescar);
-    fuente.onerror = () => {
-      setConectado(false);
-      if (fuente.readyState === EventSource.CLOSED) {
-        void pedir('/api/cocina/comandas').catch(() => undefined); // si el PIN venció, vuelve al ingreso
-        reintento = window.setTimeout(() => setIntento((n) => n + 1), 5000);
-      }
-    };
-    return () => {
-      fuente.close();
-      window.clearTimeout(reintento);
-    };
-  }, [cliente, intento]);
+  }, [cliente]);
   return conectado;
+}
+
+/** Que la pantalla no se apague sola (si el navegador lo permite: solo en páginas seguras, como la de la propia PC). */
+function useMantenerEncendida(): void {
+  useEffect(() => {
+    let candado: { release: () => Promise<void> } | null = null;
+    const pedirla = () => {
+      const w = (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock;
+      void w?.request('screen').then((c) => (candado = c)).catch(() => undefined);
+    };
+    pedirla();
+    const alVolver = () => document.visibilityState === 'visible' && pedirla();
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      document.removeEventListener('visibilitychange', alVolver);
+      void candado?.release().catch(() => undefined);
+    };
+  }, []);
 }
 
 const COLUMNAS: { estado: EstadoComanda; titulo: string }[] = [
@@ -120,6 +127,7 @@ function Pantalla({ alBloquear }: { alBloquear: () => void }) {
   const [filtro, setFiltro] = useState<Filtro>(filtroGuardado);
   const ahora = useAhora(15_000);
   const conectado = useEventosCocina();
+  useMantenerEncendida();
   const cliente = useQueryClient();
   const comandas = useQuery({
     queryKey: ['comandas', filtro],

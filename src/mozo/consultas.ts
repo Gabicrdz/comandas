@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Cambio, IngresoMozo, Menu, PedidoDetalle, RondaAgregada, Salon, Usuario } from '@compartido/tipos';
 import type { DatosRonda } from '@compartido/esquemas';
 import { pedir, tokenGuardado } from './api';
+import { conectarEventos } from './eventos';
 
 export const useHola = () => useQuery({ queryKey: ['hola'], queryFn: () => pedir<{ local: string }>('/api/hola') });
 export const useEquipo = () => useQuery({ queryKey: ['equipo'], queryFn: () => pedir<Usuario[]>('/api/equipo') });
@@ -53,42 +54,28 @@ function avisarAlMozo(texto: string, detalle?: string): void {
 export function useEventos(activo: boolean, yoId?: number): boolean {
   const cliente = useQueryClient();
   const [conectado, setConectado] = useState(true);
-  const [intento, setIntento] = useState(0);
   useEffect(() => {
     const token = tokenGuardado();
     if (!activo || !token) return;
-    const fuente = new EventSource(`/api/eventos?token=${encodeURIComponent(token)}`);
-    let reintento: number | undefined;
-    fuente.addEventListener('hola', () => {
-      setConectado(true);
-      void cliente.invalidateQueries(); // al reconectar, todo puede haber cambiado
+    return conectarEventos({
+      token,
+      alConectar: () => void cliente.invalidateQueries(), // al reconectar, todo puede haber cambiado
+      alCambio: (aviso) => {
+        const cambio = aviso as Cambio;
+        // Lo que la cocina o la barra terminó para MIS mesas: hay que ir a buscarlo.
+        if (cambio.tipo === 'comanda' && cambio.estado === 'lista' && cambio.mesa && cambio.mozoId === yoId) {
+          avisarAlMozo(`Mesa ${cambio.mesa}: ${cambio.sector === 'barra' ? 'la barra' : 'la cocina'} ya lo tiene listo`, `Ronda ${cambio.ronda} · andá a buscarlo`);
+        }
+        if (cambio.tipo === 'menu') void cliente.invalidateQueries({ queryKey: ['menu'] });
+        else {
+          void cliente.invalidateQueries({ queryKey: ['salon'] });
+          void cliente.invalidateQueries({ queryKey: ['cuenta'] });
+        }
+      },
+      alEstado: setConectado,
+      alPerderla: () => void pedir('/api/yo').catch(() => undefined), // si la sesión venció, vuelve al ingreso
     });
-    fuente.addEventListener('cambio', (e) => {
-      const cambio = JSON.parse((e as MessageEvent<string>).data) as Cambio;
-      // Lo que la cocina o la barra terminó para MIS mesas: hay que ir a buscarlo.
-      if (cambio.tipo === 'comanda' && cambio.estado === 'lista' && cambio.mesa && cambio.mozoId === yoId) {
-        avisarAlMozo(`Mesa ${cambio.mesa}: ${cambio.sector === 'barra' ? 'la barra' : 'la cocina'} ya lo tiene listo`, `Ronda ${cambio.ronda} · andá a buscarlo`);
-      }
-      if (cambio.tipo === 'menu') void cliente.invalidateQueries({ queryKey: ['menu'] });
-      else {
-        void cliente.invalidateQueries({ queryKey: ['salon'] });
-        void cliente.invalidateQueries({ queryKey: ['cuenta'] });
-      }
-    });
-    fuente.onerror = () => {
-      setConectado(false);
-      // CLOSED = el navegador se rindió (por ejemplo, la PC respondió 401 o se
-      // apagó el servidor). Revisamos la sesión y volvemos a probar en 5 s.
-      if (fuente.readyState === EventSource.CLOSED) {
-        void pedir('/api/yo').catch(() => undefined);
-        reintento = window.setTimeout(() => setIntento((n) => n + 1), 5000);
-      }
-    };
-    return () => {
-      fuente.close();
-      window.clearTimeout(reintento);
-    };
-  }, [activo, intento, cliente, yoId]);
+  }, [activo, cliente, yoId]);
   return conectado;
 }
 

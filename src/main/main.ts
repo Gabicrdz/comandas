@@ -4,7 +4,7 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { abrirBaseDeDatos, cerrarBaseDeDatos, obtenerDb, rutaBaseDeDatos } from './db/conexion';
 import { registrarCanales } from './ipc';
-import { copiaAlIniciar } from './copias';
+import { copiaAlIniciar, rutaCopiaAntesDeActualizar } from './copias';
 import { crearControlRed } from './red/control';
 import { escucharCambios } from './red/avisos';
 import { obtenerConfiguracion } from './servicios/configuracion';
@@ -134,7 +134,7 @@ async function imprimirRondaDelCelular(pedidoId: number, ronda: number): Promise
 app.whenReady().then(() => {
   if (!esLaUnica) return;
   if (app.isPackaged) Menu.setApplicationMenu(null);
-  abrirBaseDeDatos(path.join(app.getPath('userData'), 'comandas.db'));
+  abrirBaseDeDatos(path.join(app.getPath('userData'), 'comandas.db'), { copiaAntesDeActualizar: rutaCopiaAntesDeActualizar });
   registrarCanales(() => ({ version: app.getVersion(), baseDeDatos: rutaBaseDeDatos() }), red);
   crearVentana();
   // Todo aviso de cambio también le llega a la ventana de la PC.

@@ -13,5 +13,7 @@ export default defineConfig({
   test: {
     include: ['pruebas/**/*.test.ts'],
     environment: 'node',
+    // La demo arma ~45 días de ventas (dos veces en una prueba): en una PC lenta pasa de los 5 s de fábrica.
+    testTimeout: 30_000,
   },
 });

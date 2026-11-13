@@ -5,6 +5,7 @@ import { cargarDemo, CAJERA_DEMO, DIAS_DEMO, hayPedidos } from '../src/main/serv
 import { guardarUsuario } from '../src/main/servicios/usuarios';
 import { abrirCaja, cajaAbierta, historialDeCajas } from '../src/main/servicios/caja';
 import { obtenerReporte } from '../src/main/servicios/reportes';
+import { obtenerReporteSalon } from '../src/main/servicios/reporte-salon';
 import { listarClientes } from '../src/main/servicios/clientes';
 import { esquemaListarClientes, esquemaRango } from '../src/compartido/esquemas';
 import { baseNueva } from './ayudantes';
@@ -28,7 +29,7 @@ describe('datos de demostración', () => {
 
     const reporte = obtenerReporte(db, esquemaRango.parse({ desde: '2026-09-27', hasta: '2026-11-10' }));
     expect(reporte.porDia.filter((d) => d.pedidos > 0)).toHaveLength(DIAS_DEMO);
-    expect(reporte.porUsuario.map((u) => u.nombre).sort()).toEqual([CAJERA_DEMO.nombre, 'Sergio']);
+    expect(reporte.porUsuario.map((u) => u.nombre).sort()).toEqual(['Lucas', CAJERA_DEMO.nombre, 'Sergio', 'Sofía']); // cajera, dueño y los dos mozos
     expect(reporte.anulados.cantidad).toBeGreaterThan(0);
     expect(reporte.porHora.slice(0, 11).every((h) => h.pedidos === 0)).toBe(true); // nada antes de las 11
     expect(listarClientes(db, esquemaListarClientes.parse({}))).toHaveLength(8);
@@ -44,6 +45,27 @@ describe('datos de demostración', () => {
     expect(pendientes.n).toBeGreaterThan(0);
     const viejosSinEntregar = db.$client.prepare(`SELECT count(*) AS n FROM pedidos WHERE fecha < '2026-11-10' AND estado NOT IN ('entregado','anulado')`).get();
     expect(viejosSinEntregar).toEqual({ n: 0 });
+  });
+
+  it('también llena el salón: cuentas de mesa con mozos, tiempos de cocina y propinas', () => {
+    cargarDemo(db, dueno, ahora);
+    const salon = obtenerReporteSalon(db, esquemaRango.parse({ desde: '2026-10-20', hasta: '2026-11-10' }));
+    expect(salon.mozos.map((m) => m.nombre).sort()).toEqual(['Lucas', 'Sofía']);
+    expect(salon.mozos.every((m) => m.cuentas > 20)).toBe(true);
+    expect(salon.mozos.reduce((s, m) => s + m.propinasCentavos, 0)).toBeGreaterThan(0);
+    const cocina = salon.cocina.find((x) => x.sector === 'cocina')!;
+    const barra = salon.cocina.find((x) => x.sector === 'barra')!;
+    expect(cocina.comandas).toBeGreaterThan(50);
+    expect(barra.comandas).toBeGreaterThan(5);
+    expect(cocina.tardias).toBeGreaterThan(0); // algunas se demoran, para que se vea el aviso
+    // Las propinas no se cuentan como venta
+    const reporte = obtenerReporte(db, esquemaRango.parse({ desde: '2026-10-20', hasta: '2026-11-10' }));
+    expect(reporte.propinasCentavos).toBeGreaterThan(0);
+    // El salón queda "vivo": las mesas con cuenta abierta son las del salón de ejemplo, no cuentas viejas sin cobrar
+    const mesasConCuenta = db.$client.prepare(`SELECT count(*) AS n FROM pedidos WHERE mesa_id IS NOT NULL AND cobrado = 0 AND estado <> 'anulado'`).get();
+    expect((mesasConCuenta as { n: number }).n).toBeGreaterThan(0);
+    const abiertasViejas = db.$client.prepare(`SELECT count(*) AS n FROM pedidos WHERE mesa_id IS NOT NULL AND cobrado = 0 AND estado <> 'anulado' AND fecha < '2026-11-10'`).get();
+    expect(abiertasViejas).toEqual({ n: 0 });
   });
 
   it('no se carga si ya hay pedidos o si hay una caja abierta', () => {

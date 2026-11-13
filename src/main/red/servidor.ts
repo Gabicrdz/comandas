@@ -101,7 +101,9 @@ export async function iniciarServidor(opciones: OpcionesServidor): Promise<numbe
   // Un comentario cada 25 s mantiene viva la conexión (algunos routers cortan
   // las conexiones que no mandan nada por un rato).
   latido = setInterval(() => {
-    for (const res of conectados) res.write(': sigo acá\n\n');
+    // Además del comentario, un evento con nombre: el navegador no deja ver los
+    // comentarios, y con este el celular sabe que la conexión sigue viva.
+    for (const res of conectados) enviarEvento(res, 'latido', {});
   }, 25_000);
 
   const direccion = nuevo.address();
@@ -298,8 +300,11 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
     if (metodo === 'POST' && cuenta[2] === '/rondas') {
       const datos = esquemaRonda.parse(await leerJson(req));
       const r = salon.agregarRonda(db, pedidoId, datos, yo);
-      const mesa = obtenerPedido(db, pedidoId).mesa;
-      avisarCambio({ tipo: 'ronda', origen: 'celular', pedidoId, ronda: r.ronda, mesa, quien: yo.nombre, vaACocina: r.vaACocina });
+      // Un reintento (la respuesta anterior se perdió) no vuelve a sonar ni a imprimir.
+      if (!r.repetida) {
+        const mesa = obtenerPedido(db, pedidoId).mesa;
+        avisarCambio({ tipo: 'ronda', origen: 'celular', pedidoId, ronda: r.ronda, mesa, quien: yo.nombre, vaACocina: r.vaACocina });
+      }
       return responderJson(res, 200, r);
     }
     if (metodo === 'POST' && cuenta[2] === '/cuenta') {

@@ -13,14 +13,23 @@ let rutaActual = '';
 
 export const VERSION_BASE = MIGRACIONES.length;
 
+export interface OpcionesDeApertura {
+  /**
+   * Si hay migraciones pendientes en una base que ya tenía datos, se llama ANTES de
+   * aplicarlas con la versión actual; si devuelve una ruta, se guarda ahí una copia.
+   * Así, si una actualización saliera mal, los datos de antes están a salvo.
+   */
+  copiaAntesDeActualizar?: (versionActual: number) => string | null;
+}
+
 /** Abre (o crea) la base en `ruta`. Con ':memory:' queda en memoria (pruebas). */
-export function abrirBaseDeDatos(ruta: string): BaseDeDatos {
+export function abrirBaseDeDatos(ruta: string, opciones: OpcionesDeApertura = {}): BaseDeDatos {
   if (db) return db;
   const conexion = new Database(ruta);
   try {
     conexion.pragma('journal_mode = WAL');
     conexion.pragma('foreign_keys = ON');
-    aplicarMigraciones(conexion);
+    aplicarMigraciones(conexion, opciones);
   } catch (error) {
     // Si algo falla al abrir, cerramos el archivo: si no, queda "tomado"
     // y Windows no deja moverlo, borrarlo ni volver a abrirlo bien.
@@ -33,12 +42,22 @@ export function abrirBaseDeDatos(ruta: string): BaseDeDatos {
   return db;
 }
 
-function aplicarMigraciones(conexion: Database.Database): void {
+function aplicarMigraciones(conexion: Database.Database, opciones: OpcionesDeApertura): void {
   const actual = Number(conexion.pragma('user_version', { simple: true }));
   if (actual > MIGRACIONES.length) {
     throw new Error(
       `La base de datos es de una versión más nueva del sistema (${actual}). Actualizá el programa.`,
     );
+  }
+  if (actual > 0 && actual < MIGRACIONES.length && opciones.copiaAntesDeActualizar) {
+    try {
+      const destino = opciones.copiaAntesDeActualizar(actual);
+      // VACUUM INTO arma una copia completa y consistente (incluye lo que todavía está en el -wal).
+      if (destino) conexion.prepare('VACUUM INTO ?').run(destino);
+    } catch (error) {
+      // Si no se puede copiar (disco lleno, carpeta bloqueada), no dejamos al local sin sistema.
+      console.error('No se pudo hacer la copia previa a la actualización:', error);
+    }
   }
   MIGRACIONES.slice(actual).forEach((migracion, i) => {
     const version = actual + i + 1;

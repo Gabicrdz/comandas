@@ -337,6 +337,8 @@ export const esquemaRonda = z.object({
   items: z.array(esquemaItemPedido).min(1, 'La ronda está vacía.').max(60, 'Una ronda tiene hasta 60 renglones.'),
   /** Lo que vio la persona: si el menú cambió mientras cargaba, no coincide. */
   totalEsperadoCentavos: z.number().int().min(0),
+  /** La genera el celular en cada "Mandar": con la misma clave, la PC no carga la ronda dos veces. */
+  claveEnvio: z.string().min(8).max(64).optional(),
 });
 export type DatosRonda = z.input<typeof esquemaRonda>;
 

@@ -93,6 +93,26 @@ export function TarjetaRed() {
         </div>
       )}
 
+      {estado.data?.activa && (
+        <details className="mt-4 text-sm">
+          <summary className="cursor-pointer font-semibold text-tinta-suave">El celular no abre la página: qué revisar</summary>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-tinta-suave">
+            <li>Que el celular esté en el <strong>mismo wifi</strong> que esta PC. Si el celular usa datos móviles, no va a abrir.</li>
+            <li>
+              Que ese wifi no sea el de <strong>invitados</strong>: muchos routers aíslan los aparatos entre sí y el celular no ve la PC. Usá el wifi principal
+              del local (o armá uno aparte para los mozos, con clave).
+            </li>
+            <li>
+              Si en la PC Windows nunca preguntó por el permiso de red, abrí PowerShell <strong>como administrador</strong> y pegá este comando (una sola vez):
+              <code className="mt-1 block rounded-md bg-accent px-2.5 py-1.5 font-mono text-[12px] break-all text-tinta">
+                {`New-NetFirewallRule -DisplayName "Comandas" -Direction Inbound -Protocol TCP -LocalPort ${Number.isInteger(numero) ? numero : 3000} -Action Allow -Profile Private,Domain`}
+              </code>
+            </li>
+            <li>Si la PC cambia de dirección en la red, volvé a escanear el QR (la dirección que muestra es la de ahora).</li>
+          </ol>
+        </details>
+      )}
+
       <details className="mt-4 text-sm">
         <summary className="cursor-pointer font-semibold text-tinta-suave">Avanzado: puerto</summary>
         <form

@@ -2,7 +2,7 @@
 // diálogos para elegir archivos y reiniciar el programa. La lógica "pura"
 // (copiar, revisar, rotar) está en servicios/copias.ts y tiene pruebas.
 import { app, BrowserWindow, dialog, shell } from 'electron';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import type { CopiaElegida, EstadoCopias, InfoCopia } from '@compartido/tipos';
 import { abrirBaseDeDatos, cerrarBaseDeDatos, obtenerDb, rutaBaseDeDatos } from './db/conexion';
@@ -22,6 +22,22 @@ export const carpetaCopias = () => path.join(app.getPath('documents'), 'Comandas
 const carpetaAutomaticas = () => path.join(carpetaCopias(), 'Automaticas');
 const ventana = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
 const FILTRO = [{ name: 'Copia de Comandas', extensions: ['db'] }];
+
+/**
+ * Antes de actualizar la base de datos (programa nuevo con cambios), se guarda
+ * una copia en Copias\Antes de actualizar. Quedan las últimas 5.
+ */
+export function rutaCopiaAntesDeActualizar(versionActual: number, ahora: Date = new Date()): string {
+  const carpeta = path.join(carpetaCopias(), 'Antes de actualizar');
+  mkdirSync(carpeta, { recursive: true });
+  const p = (n: number) => String(n).padStart(2, '0');
+  const sello = `${ahora.getFullYear()}-${p(ahora.getMonth() + 1)}-${p(ahora.getDate())}_${p(ahora.getHours())}-${p(ahora.getMinutes())}`;
+  const destino = path.join(carpeta, `comandas-v${versionActual}-${sello}.db`);
+  if (existsSync(destino)) rmSync(destino, { force: true }); // VACUUM INTO no pisa un archivo existente
+  const viejas = readdirSync(carpeta).filter((n) => n.endsWith('.db')).sort().reverse().slice(4);
+  for (const n of viejas) rmSync(path.join(carpeta, n), { force: true });
+  return destino;
+}
 
 /** Al abrir el programa: copia del día si todavía no hay. Si falla, no frena nada. */
 export async function copiaAlIniciar(): Promise<void> {

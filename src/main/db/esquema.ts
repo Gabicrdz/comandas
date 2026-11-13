@@ -247,6 +247,7 @@ export const rondas = sqliteTable('rondas', {
   numero: integer('numero').notNull(),
   creadaEn: text('creada_en').notNull(),
   usuarioId: integer('usuario_id').references(() => usuarios.id),
+  claveEnvio: text('clave_envio'),
 });
 
 // ───────── Cocina y barra (etapa 3 de Comandas) ─────────

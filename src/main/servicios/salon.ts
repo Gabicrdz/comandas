@@ -319,6 +319,28 @@ export function agregarRonda(
 ): RondaAgregada {
   return db.transaction((tx) => {
     const cuenta = cuentaParaCambiar(tx, pedidoId);
+    // ¿Ya llegó esta misma ronda? (el celular reintentó porque no vio la respuesta)
+    if (datos.claveEnvio) {
+      const previa = tx
+        .select({ numero: rondas.numero })
+        .from(rondas)
+        .where(and(eq(rondas.pedidoId, pedidoId), eq(rondas.claveEnvio, datos.claveEnvio)))
+        .get();
+      if (previa) {
+        const items = tx
+          .select({ total: pedidoItems.totalCentavos, vaACocina: pedidoItems.vaACocina })
+          .from(pedidoItems)
+          .where(and(eq(pedidoItems.pedidoId, pedidoId), eq(pedidoItems.ronda, previa.numero)))
+          .all();
+        return {
+          ronda: previa.numero,
+          rondaCentavos: items.reduce((s, i) => s + i.total, 0),
+          totalCentavos: cuenta.totalCentavos,
+          vaACocina: items.some((i) => i.vaACocina),
+          repetida: true,
+        };
+      }
+    }
     const lineas = armarLineas(tx, datos.items);
     const rondaCentavos = lineas.reduce((s, l) => s + l.totalCentavos, 0);
     if (rondaCentavos !== datos.totalEsperadoCentavos) {
@@ -329,7 +351,9 @@ export function agregarRonda(
     const ultima = tx.select({ n: max(rondas.numero) }).from(rondas).where(eq(rondas.pedidoId, pedidoId)).get()?.n ?? 0;
     const ronda = ultima + 1;
     const renglones = renglonesDe(tx, pedidoId);
-    tx.insert(rondas).values({ pedidoId, numero: ronda, creadaEn: momentoLocal(ahora), usuarioId: usuario?.id ?? null }).run();
+    tx.insert(rondas)
+      .values({ pedidoId, numero: ronda, creadaEn: momentoLocal(ahora), usuarioId: usuario?.id ?? null, claveEnvio: datos.claveEnvio ?? null })
+      .run();
     guardarLineas(tx, pedidoId, lineas, ronda, renglones);
     crearComandas(tx, pedidoId, ronda, lineas, ahora);
 

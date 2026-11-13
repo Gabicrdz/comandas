@@ -402,4 +402,13 @@ export const MIGRACIONES: Migracion[] = [
       CREATE INDEX items_quitados_por_fecha ON items_quitados (creado_en);
     `,
   },
+  {
+    nombre: 'Rondas: clave de envío para no duplicar si se corta el wifi',
+    sql: /* sql */ `
+      -- El celular genera una clave por cada "Mandar": si la respuesta se pierde
+      -- y el mozo reintenta, la PC reconoce la clave y no carga la ronda dos veces.
+      ALTER TABLE rondas ADD COLUMN clave_envio TEXT;
+      CREATE UNIQUE INDEX rondas_clave_envio ON rondas (pedido_id, clave_envio) WHERE clave_envio IS NOT NULL;
+    `,
+  },
 ];
