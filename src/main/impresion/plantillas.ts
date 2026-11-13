@@ -7,6 +7,7 @@ import {
   NOMBRE_MEDIO,
   NOMBRE_MOVIMIENTO,
   NOMBRE_TIPO,
+  type ParteImpresa,
   type PedidoDetalle,
   type ResumenCaja,
 } from '@compartido/tipos';
@@ -140,6 +141,7 @@ export function htmlTicket(p: PedidoDetalle, local: Local, anchoMm: 58 | 80): st
       .join('')}
     <div class="linea"></div>
     ${p.envioCentavos > 0 ? `<div class="fila"><span>Subtotal</span><span>${pesos(p.subtotalCentavos)}</span></div><div class="fila"><span>Envío</span><span>${pesos(p.envioCentavos)}</span></div>` : ''}
+    ${p.propinaCentavos > 0 ? `<div class="fila"><span>Consumo</span><span>${pesos(p.totalCentavos - p.propinaCentavos)}</span></div><div class="fila"><span>Propina</span><span>${pesos(p.propinaCentavos)}</span></div>` : ''}
     <div class="fila grande"><span>TOTAL</span><span>${pesos(p.totalCentavos)}</span></div>
     ${
       p.estado === 'anulado'
@@ -158,6 +160,30 @@ export function htmlTicket(p: PedidoDetalle, local: Local, anchoMm: 58 | 80): st
     ${pie ? `<div class="centro negrita">${escapar(pie)}</div>` : ''}
   `;
   return documento(`Ticket #${p.numero}`, cuerpo, anchoMm);
+}
+
+/** Lo que paga cada persona cuando se divide la cuenta: una hoja con un bloque por persona. */
+export function htmlDivision(p: PedidoDetalle, partes: ParteImpresa[], local: Local, anchoMm: 58 | 80): string {
+  const bloques = partes
+    .map(
+      (x) => `
+    <div class="centro negrita">${escapar(x.titulo)}</div>
+    ${x.renglones.map((r) => `<div class="fila"><span>${escapar(r.texto)}</span><span>${pesos(r.montoCentavos)}</span></div>`).join('')}
+    ${x.propinaCentavos > 0 ? `<div class="fila"><span>Consumo</span><span>${pesos(x.consumoCentavos)}</span></div><div class="fila"><span>Propina</span><span>${pesos(x.propinaCentavos)}</span></div>` : ''}
+    <div class="fila grande"><span>PAGA</span><span>${pesos(x.totalCentavos)}</span></div>
+    <div class="linea"></div>`,
+    )
+    .join('');
+  const cuerpo = `
+    ${encabezado(local)}
+    <div class="centro">${fechaCorta(p.fecha)} · ${p.hora}</div>
+    <div class="centro negrita">Cuenta dividida · ${destino(p)}</div>
+    <div class="linea"></div>
+    ${bloques}
+    <div class="fila negrita"><span>Total de la mesa</span><span>${pesos(partes.reduce((s, x) => s + x.totalCentavos, 0))}</span></div>
+    <div class="centro chico">Comprobante no válido como factura</div>
+  `;
+  return documento(`Cuenta dividida #${p.numero}`, cuerpo, anchoMm);
 }
 
 export function htmlImpresion(tipo: 'comanda' | 'ticket', p: PedidoDetalle, local: Local, anchoMm: 58 | 80): string | null {

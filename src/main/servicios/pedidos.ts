@@ -4,7 +4,7 @@
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { BaseDeDatos } from '../db/conexion';
-import { pagos, pedidoItemAgregados, pedidoItems, pedidos, rondas, usuarios } from '../db/esquema';
+import { itemsQuitados, pagos, pedidoItemAgregados, pedidoItems, pedidos, rondas, usuarios } from '../db/esquema';
 import type { esquemaEstado, esquemaItemPedido, esquemaPagos, esquemaPedido } from '@compartido/esquemas';
 import { armarLinea, type Linea } from '@compartido/precios';
 import { pesos } from '@compartido/dinero';
@@ -228,7 +228,7 @@ export function resumenDelDia(db: BaseDeDatos, ahora: Date = new Date()): Resume
   const fila = db
     .select({
       pedidos: sql<number>`count(*)`,
-      totalCentavos: sql<number>`coalesce(sum(${pedidos.totalCentavos}), 0)`,
+      totalCentavos: sql<number>`coalesce(sum(${pedidos.totalCentavos} - ${pedidos.propinaCentavos}), 0)`,
     })
     .from(pedidos)
     .where(and(eq(pedidos.fecha, fecha), ne(pedidos.estado, 'anulado')))
@@ -266,6 +266,23 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
     .orderBy(asc(rondas.numero))
     .all();
   const listaComandas = comandasDe(db, ids);
+  const listaQuitados = db
+    .select({
+      id: itemsQuitados.id,
+      pedidoId: itemsQuitados.pedidoId,
+      nombre: itemsQuitados.nombre,
+      cantidad: itemsQuitados.cantidad,
+      montoCentavos: itemsQuitados.montoCentavos,
+      ronda: itemsQuitados.ronda,
+      motivo: itemsQuitados.motivo,
+      usuario: usuarios.nombre,
+      creadoEn: itemsQuitados.creadoEn,
+    })
+    .from(itemsQuitados)
+    .leftJoin(usuarios, eq(usuarios.id, itemsQuitados.usuarioId))
+    .where(inArray(itemsQuitados.pedidoId, ids))
+    .orderBy(asc(itemsQuitados.id))
+    .all();
   const idsMozos = [...new Set(filas.map((f) => f.mozoId).filter((m): m is number => m !== null))];
   const mozos = new Map(
     (idsMozos.length ? db.select({ id: usuarios.id, nombre: usuarios.nombre }).from(usuarios).where(inArray(usuarios.id, idsMozos)).all() : []).map(
@@ -325,6 +342,8 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
       .filter((r) => r.pedidoId === f.id)
       .map((r) => ({ numero: r.numero, hora: r.creadaEn.slice(11, 16), usuario: r.usuario ?? null })),
     comandas: listaComandas.filter((c) => c.pedidoId === f.id).map(({ id, ronda, sector, estado }) => ({ id, ronda, sector, estado })),
+    propinaCentavos: f.propinaCentavos,
+    quitados: listaQuitados.filter((q) => q.pedidoId === f.id).map(({ pedidoId: _pedido, usuario, ...q }) => ({ ...q, usuario: usuario ?? null })),
   }));
 }
 

@@ -119,7 +119,8 @@ export function cambiarEstadoComanda(db: BaseDeDatos, id: number, estado: Estado
           estado,
           // Cada momento queda anotado (sirve para medir tiempos de cocina). Al volver atrás, se borra.
           empezadaEn: hasta >= 1 ? (c.empezadaEn ?? momento) : null,
-          listaEn: hasta >= 2 ? (hasta === desde + 1 || !c.listaEn ? momento : c.listaEn) : null,
+          // Si ya estaba lista (y ahora la entregan, o la vuelven a lista) se conserva la hora en que quedó lista.
+          listaEn: hasta >= 2 ? (desde >= 2 && c.listaEn ? c.listaEn : momento) : null,
           entregadaEn: hasta >= 3 ? momento : null,
         })
         .where(eq(comandas.id, id))

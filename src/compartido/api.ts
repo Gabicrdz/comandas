@@ -17,6 +17,7 @@ import type {
   DatosAbrirMesa,
   DatosEditarCuenta,
   DatosMesa,
+  DatosQuitarItem,
   DatosRonda,
   DatosZona,
   DatosRed,
@@ -34,7 +35,9 @@ import type {
   PedidoCreado,
   PedidoDetalle,
   PedidoDeCliente,
+  ParteImpresa,
   Reporte,
+  ReporteSalon,
   Respuesta,
   RondaAgregada,
   Salon,
@@ -118,6 +121,14 @@ export interface ApiCaja {
     pedirCuenta(pedidoId: number, pedida: boolean): Promise<Respuesta<null>>;
     /** Se fueron sin pedir nada. */
     liberar(pedidoId: number): Promise<Respuesta<null>>;
+    /** Pone la propina de la cuenta (0 la saca). Devuelve el total nuevo. */
+    fijarPropina(pedidoId: number, propinaCentavos: number): Promise<Respuesta<number>>;
+    /** Solo el dueño y con motivo. */
+    quitarItem(pedidoId: number, datos: DatosQuitarItem): Promise<Respuesta<{ montoCentavos: number; totalCentavos: number }>>;
+    /** La cuenta sigue igual, en otra mesa que esté libre. */
+    pasarMesa(pedidoId: number, mesaDestinoId: number): Promise<Respuesta<null>>;
+    /** Une la cuenta `origenId` a la cuenta `destinoId` (las dos abiertas). */
+    juntarMesas(origenId: number, destinoId: number): Promise<Respuesta<null>>;
   };
   clientes: {
     /** Para el delivery: hasta 6 clientes que coinciden por teléfono o nombre. */
@@ -129,6 +140,8 @@ export interface ApiCaja {
   reportes: {
     /** Solo el dueño. Fechas 'AAAA-MM-DD', las dos incluidas. */
     obtener(rango: DatosRango): Promise<Respuesta<Reporte>>;
+    /** Solo el dueño: rendimiento de cada mozo y tiempos de cocina y barra. */
+    salon(rango: DatosRango): Promise<Respuesta<ReporteSalon>>;
   };
   impresion: {
     /** id = pedido (comanda, ticket) o caja (cierre). impreso = false si se canceló el diálogo. */
@@ -138,6 +151,8 @@ export interface ApiCaja {
     impresoras(): Promise<Respuesta<Impresora[]>>;
     /** La comanda de UNA ronda de una mesa (lo nuevo que pidieron). */
     ronda(pedidoId: number, ronda: number, destino: 'impresora' | 'pdf'): Promise<Respuesta<{ impreso: boolean; ruta: string | null }>>;
+    /** Un papel con lo que paga cada persona (la división de la cuenta). */
+    division(pedidoId: number, partes: ParteImpresa[], destino: 'impresora' | 'pdf'): Promise<Respuesta<{ impreso: boolean; ruta: string | null }>>;
   };
   configuracion: {
     obtener(): Promise<Respuesta<Configuracion>>;
@@ -232,6 +247,12 @@ export const CANALES = {
   mesaEditar: 'salon:editar',
   mesaPedirCuenta: 'salon:pedir-cuenta',
   mesaLiberar: 'salon:liberar',
+  mesaPropina: 'salon:propina',
+  mesaQuitarItem: 'salon:quitar-item',
+  mesaPasar: 'salon:pasar',
+  mesaJuntar: 'salon:juntar',
+  impresionDivision: 'impresion:division',
+  reportesSalon: 'reportes:salon',
   impresionRonda: 'impresion:ronda',
   clientesBuscar: 'clientes:buscar',
   clientesListar: 'clientes:listar',

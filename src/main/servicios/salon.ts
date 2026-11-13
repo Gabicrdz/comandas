@@ -152,14 +152,14 @@ function mesasDeZona(tx: Lector, zonaId: number): MesaEnPlano[] {
     .all();
 }
 
-function mesaActiva(tx: Lector, id: number) {
+export function mesaActiva(tx: Lector, id: number) {
   const mesa = tx.select().from(mesas).where(and(eq(mesas.id, id), eq(mesas.activa, true))).get();
   if (!mesa) throw new ErrorDeUsuario('Esa mesa ya no existe.');
   return mesa;
 }
 
 /** La cuenta abierta de una mesa (o undefined si está libre). */
-function cuentaAbiertaDe(tx: Lector, mesaId: number) {
+export function cuentaAbiertaDe(tx: Lector, mesaId: number) {
   return tx
     .select({ id: pedidos.id })
     .from(pedidos)
@@ -243,7 +243,7 @@ function revisarMozo(tx: Lector, mozoId: number | null): void {
 }
 
 /** La cuenta abierta (pedido de mesa sin cobrar). Si no se puede tocar, explica por qué. */
-function cuentaParaCambiar(tx: Lector, pedidoId: number) {
+export function cuentaParaCambiar(tx: Lector, pedidoId: number) {
   const pedido = tx.select().from(pedidos).where(eq(pedidos.id, pedidoId)).get();
   if (!pedido || pedido.mesaId === null) throw new ErrorDeUsuario('Esa cuenta no existe.');
   if (pedido.estado === 'anulado') throw new ErrorDeUsuario(`La cuenta de la mesa ${pedido.mesa} fue anulada.`);
@@ -251,7 +251,7 @@ function cuentaParaCambiar(tx: Lector, pedidoId: number) {
   return pedido;
 }
 
-function renglonesDe(tx: Lector, pedidoId: number): number {
+export function renglonesDe(tx: Lector, pedidoId: number): number {
   const fila = tx.select({ n: sql<number>`count(*)` }).from(pedidoItems).where(eq(pedidoItems.pedidoId, pedidoId)).get();
   return Number(fila?.n ?? 0);
 }
@@ -334,11 +334,14 @@ export function agregarRonda(
     crearComandas(tx, pedidoId, ronda, lineas, ahora);
 
     const vaACocina = lineas.some((l) => l.producto.vaACocina);
-    const totalCentavos = cuenta.totalCentavos + rondaCentavos;
+    // La propina se calcula sobre lo consumido: si pidieron más, se vuelve a poner al cobrar.
+    const subtotalCentavos = cuenta.subtotalCentavos + rondaCentavos;
+    const totalCentavos = subtotalCentavos + cuenta.envioCentavos;
     tx.update(pedidos)
       .set({
-        subtotalCentavos: cuenta.subtotalCentavos + rondaCentavos,
+        subtotalCentavos,
         totalCentavos,
+        propinaCentavos: 0,
         // Si pidieron algo más, ya no están "esperando la cuenta".
         cuentaPedidaEn: null,
         ...(vaACocina ? { estado: 'pendiente' as const } : {}),

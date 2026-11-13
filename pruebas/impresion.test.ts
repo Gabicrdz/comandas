@@ -39,6 +39,8 @@ const pedido: PedidoDetalle = {
   cuentaPedidaEn: null,
   rondas: [],
   comandas: [],
+  propinaCentavos: 0,
+  quitados: [],
 };
 
 const texto = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');

@@ -376,4 +376,30 @@ export const MIGRACIONES: Migracion[] = [
       CREATE INDEX comandas_por_estado ON comandas (estado, creada_en);
     `,
   },
+  {
+    nombre: 'Cuenta de la mesa: propina y registro de ítems quitados',
+    sql: /* sql */ `
+      -- La propina es PARTE de total_centavos (lo que se cobra), pero no es una
+      -- venta del local: los reportes la restan y la muestran aparte.
+      ALTER TABLE pedidos ADD COLUMN propina_centavos INTEGER NOT NULL DEFAULT 0 CHECK (propina_centavos >= 0);
+
+      -- Cuando el dueño saca algo de una cuenta, el renglón se corrige (o se
+      -- borra) y acá queda anotado qué fue, cuánto y por qué.
+      CREATE TABLE items_quitados (
+        id            INTEGER PRIMARY KEY,
+        pedido_id     INTEGER NOT NULL REFERENCES pedidos (id),
+        producto_id   INTEGER REFERENCES productos (id),
+        nombre        TEXT    NOT NULL,
+        cantidad      INTEGER NOT NULL CHECK (cantidad >= 1),
+        monto_centavos INTEGER NOT NULL CHECK (monto_centavos >= 0),
+        ronda         INTEGER NOT NULL DEFAULT 1,
+        sector        TEXT CHECK (sector IS NULL OR sector IN ('cocina', 'barra')),
+        motivo        TEXT    NOT NULL,
+        usuario_id    INTEGER REFERENCES usuarios (id),
+        creado_en     TEXT    NOT NULL           -- 'AAAA-MM-DD HH:MM:SS'
+      );
+      CREATE INDEX items_quitados_por_pedido ON items_quitados (pedido_id);
+      CREATE INDEX items_quitados_por_fecha ON items_quitados (creado_en);
+    `,
+  },
 ];

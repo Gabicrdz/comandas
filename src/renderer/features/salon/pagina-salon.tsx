@@ -239,6 +239,7 @@ export function PaginaSalon() {
             alAgregar={() => setRondaPara(elegida.id)}
             alCobrar={(c) => setCobrando(c)}
             alLiberada={() => setElegidaId(null)}
+            alElegirMesa={setElegidaId}
           />
         ) : (
           <PanelLibre mesa={elegida} salon={datos} alAbierta={() => setRondaPara(elegida.id)} />

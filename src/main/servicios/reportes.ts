@@ -39,27 +39,29 @@ export function obtenerReporte(db: Consultable, { desde, hasta }: Rango): Report
 
   // 1) Totales
   const totales = fila<{ pedidos: number; ventas: number; envio: number }>(
-    `SELECT count(*) AS pedidos, coalesce(sum(p.total_centavos), 0) AS ventas, coalesce(sum(p.envio_centavos), 0) AS envio
+    `SELECT count(*) AS pedidos, coalesce(sum(p.total_centavos - p.propina_centavos), 0) AS ventas, coalesce(sum(p.envio_centavos), 0) AS envio
      FROM pedidos p WHERE ${NO_ANULADO}`,
     ...r,
   );
   const anulados = fila<{ cantidad: number; total: number }>(
-    `SELECT count(*) AS cantidad, coalesce(sum(p.total_centavos), 0) AS total
+    `SELECT count(*) AS cantidad, coalesce(sum(p.total_centavos - p.propina_centavos), 0) AS total
      FROM pedidos p WHERE p.fecha BETWEEN ? AND ? AND p.estado = 'anulado'`,
     ...r,
   );
   const sinCobrar = fila<{ cantidad: number; total: number }>(
-    `SELECT count(*) AS cantidad, coalesce(sum(p.total_centavos), 0) AS total
+    `SELECT count(*) AS cantidad, coalesce(sum(p.total_centavos - p.propina_centavos), 0) AS total
      FROM pedidos p WHERE ${NO_ANULADO} AND p.cobrado = 0`,
     ...r,
   );
+
+  const propinas = fila<{ total: number }>(`SELECT coalesce(sum(p.propina_centavos), 0) AS total FROM pedidos p WHERE ${NO_ANULADO}`, ...r);
 
   // 2) El período anterior, del mismo largo (ej.: estos 7 días contra los 7 de antes)
   const dias = diasEntre(desde, hasta);
   const antHasta = sumarDias(desde, -1);
   const antDesde = sumarDias(desde, -dias);
   const anterior = fila<{ pedidos: number; ventas: number }>(
-    `SELECT count(*) AS pedidos, coalesce(sum(p.total_centavos), 0) AS ventas FROM pedidos p WHERE ${NO_ANULADO}`,
+    `SELECT count(*) AS pedidos, coalesce(sum(p.total_centavos - p.propina_centavos), 0) AS ventas FROM pedidos p WHERE ${NO_ANULADO}`,
     antDesde,
     antHasta,
   );
@@ -67,7 +69,7 @@ export function obtenerReporte(db: Consultable, { desde, hasta }: Rango): Report
   // 3) Por día: completamos los días sin ventas con 0 (si no, el gráfico "salta" días)
   const porFecha = new Map(
     filas<{ fecha: string; pedidos: number; ventas: number }>(
-      `SELECT p.fecha, count(*) AS pedidos, sum(p.total_centavos) AS ventas
+      `SELECT p.fecha, count(*) AS pedidos, sum(p.total_centavos - p.propina_centavos) AS ventas
        FROM pedidos p WHERE ${NO_ANULADO} GROUP BY p.fecha`,
       ...r,
     ).map((f) => [f.fecha, f]),
@@ -81,7 +83,7 @@ export function obtenerReporte(db: Consultable, { desde, hasta }: Rango): Report
   // 4) Por hora del día (0 a 23)
   const porHoraMapa = new Map(
     filas<{ hora: number; pedidos: number; ventas: number }>(
-      `SELECT CAST(substr(p.hora, 1, 2) AS INTEGER) AS hora, count(*) AS pedidos, sum(p.total_centavos) AS ventas
+      `SELECT CAST(substr(p.hora, 1, 2) AS INTEGER) AS hora, count(*) AS pedidos, sum(p.total_centavos - p.propina_centavos) AS ventas
        FROM pedidos p WHERE ${NO_ANULADO} GROUP BY 1`,
       ...r,
     ).map((f) => [f.hora, f]),
@@ -110,7 +112,7 @@ export function obtenerReporte(db: Consultable, { desde, hasta }: Rango): Report
   // 6) Por tipo de pedido
   const tipos = new Map(
     filas<{ tipo: TipoPedido; pedidos: number; ventas: number }>(
-      `SELECT p.tipo, count(*) AS pedidos, sum(p.total_centavos) AS ventas
+      `SELECT p.tipo, count(*) AS pedidos, sum(p.total_centavos - p.propina_centavos) AS ventas
        FROM pedidos p WHERE ${NO_ANULADO} GROUP BY p.tipo`,
       ...r,
     ).map((f) => [f.tipo, f]),
@@ -124,7 +126,7 @@ export function obtenerReporte(db: Consultable, { desde, hasta }: Rango): Report
   // 7) Por usuario (quién tomó el pedido)
   const porUsuario = filas<{ usuarioId: number | null; nombre: string; pedidos: number; ventasCentavos: number }>(
     `SELECT p.usuario_id AS usuarioId, coalesce(u.nombre, 'Sin usuario') AS nombre,
-            count(*) AS pedidos, sum(p.total_centavos) AS ventasCentavos
+            count(*) AS pedidos, sum(p.total_centavos - p.propina_centavos) AS ventasCentavos
      FROM pedidos p LEFT JOIN usuarios u ON u.id = p.usuario_id
      WHERE ${NO_ANULADO} GROUP BY p.usuario_id ORDER BY ventasCentavos DESC`,
     ...r,
@@ -175,5 +177,6 @@ export function obtenerReporte(db: Consultable, { desde, hasta }: Rango): Report
     porUsuario,
     productos,
     clientes,
+    propinasCentavos: propinas.total,
   };
 }

@@ -156,6 +156,23 @@ export interface PedidoDetalle {
   rondas: RondaDetalle[];
   /** Lo que tiene que preparar cada sector, con su estado (cocina y barra). */
   comandas: ComandaResumen[];
+  /** Parte del total que es propina (0 = sin propina). El consumo es total − propina. */
+  propinaCentavos: number;
+  /** Lo que el dueño sacó de la cuenta, con su motivo. */
+  quitados: ItemQuitado[];
+}
+
+export interface ItemQuitado {
+  id: number;
+  nombre: string;
+  cantidad: number;
+  montoCentavos: number;
+  ronda: number;
+  motivo: string;
+  /** Quién lo quitó. */
+  usuario: string | null;
+  /** 'AAAA-MM-DD HH:MM:SS' */
+  creadoEn: string;
 }
 
 export const ESTADOS_COMANDA = ['pendiente', 'preparando', 'lista', 'entregada'] as const;
@@ -378,7 +395,40 @@ export interface Reporte {
   porUsuario: { usuarioId: number | null; nombre: string; pedidos: number; ventasCentavos: number }[];
   productos: VentasDeProducto[];
   clientes: { conPedidos: number; nuevos: number };
+  /** Propinas del período (no están en las ventas). */
+  propinasCentavos: number;
 }
+
+/** Reportes del salón (etapa 4): rendimiento de cada mozo y tiempos de cocina y barra. */
+export interface ReporteSalon {
+  desde: string;
+  hasta: string;
+  mozos: {
+    mozoId: number | null;
+    nombre: string;
+    cuentas: number;
+    comensales: number;
+    ventasCentavos: number;
+    propinasCentavos: number;
+    ticketPromedioCentavos: number;
+    porPersonaCentavos: number;
+  }[];
+  cocina: {
+    sector: Sector;
+    comandas: number;
+    /** Promedios en segundos (null = no hay datos). */
+    esperaSeg: number | null;
+    preparacionSeg: number | null;
+    totalSeg: number | null;
+    entregaSeg: number | null;
+    /** Comandas que tardaron más de `LIMITE_TARDE_MIN` minutos desde que entraron hasta estar listas. */
+    tardias: number;
+  }[];
+  quitados: { unidades: number; montoCentavos: number; lista: (ItemQuitado & { mesa: string; numero: number })[] };
+}
+
+/** Pasado este tiempo (en minutos) una comanda se considera tarde. */
+export const LIMITE_TARDE_MIN = 20;
 
 export type Respuesta<T> = { ok: true; datos: T } | { ok: false; error: string };
 
@@ -493,4 +543,13 @@ export interface EstadoRed {
 export interface IngresoMozo {
   token: string;
   usuario: Usuario;
+}
+
+/** Una persona en la división de la cuenta, lista para imprimir. */
+export interface ParteImpresa {
+  titulo: string;
+  renglones: { texto: string; montoCentavos: number }[];
+  consumoCentavos: number;
+  propinaCentavos: number;
+  totalCentavos: number;
 }

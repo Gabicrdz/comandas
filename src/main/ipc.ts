@@ -30,6 +30,9 @@ import {
   esquemaEditarCuenta,
   esquemaMesa,
   esquemaPosicion,
+  esquemaPartesImpresas,
+  esquemaPropina,
+  esquemaQuitarItem,
   esquemaRonda,
   esquemaZona,
   esquemaRed,
@@ -62,8 +65,10 @@ import { cerrarSesion, iniciarSesion, requerir, sesionActual } from './servicios
 import { abrirCaja, cajaAbierta, cerrarCaja, historialDeCajas, registrarMovimiento, resumenDeCaja } from './servicios/caja';
 import { buscarClientes, guardarCliente, listarClientes, pedidosDeCliente } from './servicios/clientes';
 import { obtenerReporte } from './servicios/reportes';
-import { htmlCierre, htmlComanda, htmlImpresion } from './impresion/plantillas';
+import { htmlCierre, htmlComanda, htmlDivision, htmlImpresion } from './impresion/plantillas';
 import * as salon from './servicios/salon';
+import * as cuentaDeMesa from './servicios/cuenta';
+import { obtenerReporteSalon } from './servicios/reporte-salon';
 import { guardarPdf, imprimirHtml, listarImpresoras } from './impresion/imprimir';
 
 export { mensajeDeError };
@@ -237,6 +242,17 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
     salon.liberarMesa(db(), pedidoId, yo);
     return null;
   });
+  // La cuenta: propina, pasar y juntar mesas (cualquiera con sesión); sacar algo, solo el dueño.
+  manejar(CANALES.mesaPropina, 'sesion', z.tuple([id, esquemaPropina]), (pedidoId, propina) => cuentaDeMesa.fijarPropina(db(), pedidoId, propina));
+  manejar(CANALES.mesaQuitarItem, 'dueno', z.tuple([id, esquemaQuitarItem]), (pedidoId, d, yo) => cuentaDeMesa.quitarItem(db(), pedidoId, d, yo));
+  manejar(CANALES.mesaPasar, 'sesion', z.tuple([id, id]), (pedidoId, mesaId) => {
+    cuentaDeMesa.pasarMesa(db(), pedidoId, mesaId);
+    return null;
+  });
+  manejar(CANALES.mesaJuntar, 'sesion', z.tuple([id, id]), (origenId, destinoId, yo) => {
+    cuentaDeMesa.juntarMesas(db(), origenId, destinoId, yo);
+    return null;
+  });
 
   // ── Clientes (cualquiera con sesión: el cajero también corrige direcciones) ──
   manejar(CANALES.clientesBuscar, 'sesion', z.tuple([esquemaBusqueda]), (texto) => buscarClientes(db(), texto));
@@ -249,6 +265,7 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
 
   // ── Reportes (solo el dueño: muestra cuánto vende el local) ──
   manejar(CANALES.reportesObtener, 'dueno', z.tuple([esquemaRango]), (rango) => obtenerReporte(db(), rango));
+  manejar(CANALES.reportesSalon, 'dueno', z.tuple([esquemaRango]), (rango) => obtenerReporteSalon(db(), rango));
 
   manejar(CANALES.pedidoResumenHoy, 'sesion', nada, () => resumenDelDia(db()));
   manejar(CANALES.pedidoListar, 'sesion', z.tuple([esquemaFecha]), (fecha) => listarPedidos(db(), { fecha }));
@@ -297,6 +314,22 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
       if (!html) throw new ErrorDeUsuario(`La ronda ${ronda} no tiene nada para la cocina (solo bebidas o productos que no se preparan).`);
       if (destino === 'pdf') {
         const nombre = `${pedido.fecha}_mesa-${pedido.mesa}_ronda-${ronda}`.replace(/[^\w.-]+/g, '-');
+        return { impreso: false, ruta: await guardarPdf(html, config.anchoPapel, `${nombre}.pdf`) };
+      }
+      return { impreso: await imprimirHtml(html, config.anchoPapel, config.impresora), ruta: null };
+    },
+  );
+
+  manejar(
+    CANALES.impresionDivision,
+    'sesion',
+    z.tuple([id, esquemaPartesImpresas, z.enum(['impresora', 'pdf'])]),
+    async (pedidoId, partes, destino) => {
+      const config = obtenerConfiguracion(db());
+      const pedido = obtenerPedido(db(), pedidoId);
+      const html = htmlDivision(pedido, partes, local(config), config.anchoPapel);
+      if (destino === 'pdf') {
+        const nombre = `${pedido.fecha}_mesa-${pedido.mesa}_cuenta-dividida`.replace(/[^\w.-]+/g, '-');
         return { impreso: false, ruta: await guardarPdf(html, config.anchoPapel, `${nombre}.pdf`) };
       }
       return { impreso: await imprimirHtml(html, config.anchoPapel, config.impresora), ruta: null };

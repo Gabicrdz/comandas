@@ -2,18 +2,20 @@
 // libre o la cuenta de una mesa ocupada (rondas, total y botones).
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { BellRing, CircleDollarSign, Pencil, Plus, Printer, Receipt, UndoDot, UsersRound } from 'lucide-react';
+import { ArrowRightLeft, BellRing, CircleDollarSign, Divide, HandCoins, Pencil, Plus, Printer, Receipt, Trash2, UndoDot, UsersRound } from 'lucide-react';
 import { hace, minutosDesde } from '@compartido/salon';
 import { pesos } from '@compartido/dinero';
-import type { Mesa, PedidoDetalle, Salon, Usuario } from '@compartido/tipos';
+import type { ItemDetalle, Mesa, PedidoDetalle, Salon, Usuario } from '@compartido/tipos';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { caja } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Contador } from '@/features/vender/dialogo-armar';
 import { useImprimir } from '@/features/pedidos/consultas';
+import { useUsuario } from '@/features/sesion/consultas';
 import { useAccionSalon, useCuenta } from './consultas';
 import { EstadoComandas } from './estado-comandas';
+import { DialogoDividir, DialogoMesas, DialogoPropina, DialogoQuitar } from './dialogos-cuenta';
 
 // ───────────────────────── Resumen (ninguna mesa elegida) ─────────────────────────
 
@@ -190,16 +192,23 @@ interface PropsCuenta {
   alAgregar: () => void;
   alCobrar: (cuenta: PedidoDetalle) => void;
   alLiberada: () => void;
+  /** Después de pasar o juntar mesas: mostrar la mesa de destino. */
+  alElegirMesa: (mesaId: number) => void;
 }
 
-export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberada }: PropsCuenta) {
+export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberada, alElegirMesa }: PropsCuenta) {
   const resumen = mesa.cuenta!;
   const cuenta = useCuenta(resumen.pedidoId);
   const pedirCuenta = useAccionSalon(caja().salon.pedirCuenta);
   const liberar = useAccionSalon(caja().salon.liberar, { exito: `Mesa ${mesa.nombre} liberada` });
   const entregar = useAccionSalon(caja().cocina.cambiarEstado);
   const { imprimir } = useImprimir();
+  const { esDueno } = useUsuario();
   const [editando, setEditando] = useState(false);
+  const [propinando, setPropinando] = useState(false);
+  const [dividiendo, setDividiendo] = useState(false);
+  const [moviendo, setMoviendo] = useState(false);
+  const [quitando, setQuitando] = useState<ItemDetalle | null>(null);
   const p = cuenta.data;
   const vacia = resumen.unidades === 0;
 
@@ -244,6 +253,7 @@ export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberad
           <ol>
             {p.rondas.map((r) => {
               const items = p.items.filter((i) => i.ronda === r.numero);
+              if (items.length === 0) return null; // todo lo de esa ronda se sacó
               return (
                 <li key={r.numero} className="border-b border-linea">
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-[#fafaf8] px-5 py-1.5 text-[12px] font-semibold tracking-wide text-tinta-suave uppercase">
@@ -274,6 +284,17 @@ export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberad
                           {i.nota && <span className="text-[13px] italic">“{i.nota}”</span>}
                         </span>
                         <span className="numeros font-display font-semibold">{pesos(i.totalCentavos)}</span>
+                        {esDueno && (
+                          <button
+                            type="button"
+                            title="Sacar de la cuenta"
+                            onClick={() => setQuitando(i)}
+                            className="-mr-1.5 flex size-8 shrink-0 items-center justify-center rounded-md text-tinta-suave outline-none hover:bg-rojo-suave hover:text-rojo focus-visible:ring-2 focus-visible:ring-ring/30"
+                          >
+                            <Trash2 className="size-4" />
+                            <span className="sr-only">Sacar {i.nombre} de la cuenta</span>
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -282,10 +303,34 @@ export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberad
             })}
           </ol>
         )}
+        {p && p.quitados.length > 0 && (
+          <section aria-label="Sacado de la cuenta" className="border-t border-linea px-5 py-3">
+            <h3 className="text-[12px] font-semibold tracking-wide text-tinta-suave uppercase">Sacado de la cuenta</h3>
+            <ul className="mt-1 flex flex-col gap-1 text-[13px] text-tinta-suave">
+              {p.quitados.map((q) => (
+                <li key={q.id}>
+                  {q.cantidad}× {q.nombre} ({pesos(q.montoCentavos)}) · “{q.motivo}”{q.usuario ? ` · ${q.usuario}` : ''}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
 
       {/* ── Total y acciones ── */}
       <div className="flex flex-col gap-3 border-t border-linea bg-[#fafaf8] px-5 pt-4 pb-5">
+        {p && p.propinaCentavos > 0 && (
+          <dl className="flex flex-col gap-0.5 text-[14px] text-tinta-suave">
+            <div className="flex justify-between">
+              <dt>Consumo</dt>
+              <dd className="numeros">{pesos(resumen.totalCentavos - p.propinaCentavos)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Propina</dt>
+              <dd className="numeros">{pesos(p.propinaCentavos)}</dd>
+            </div>
+          </dl>
+        )}
         <div className="flex items-baseline justify-between">
           <span className="text-[15px] font-semibold">Total</span>
           <span className="numeros font-display text-[34px] leading-none font-semibold tracking-tight">{pesos(resumen.totalCentavos)}</span>
@@ -309,6 +354,17 @@ export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberad
           <Button variant="outline" disabled={vacia || imprimir.isPending} onClick={() => imprimir.mutate({ id: resumen.pedidoId, tipo: 'ticket' })}>
             <Printer /> Precuenta
           </Button>
+          <div className="col-span-2 grid grid-cols-3 gap-2">
+            <Button variant="outline" size="sm" className="h-10" disabled={vacia || !p} onClick={() => setDividiendo(true)}>
+              <Divide /> Dividir
+            </Button>
+            <Button variant="outline" size="sm" className="h-10" disabled={vacia || !p} onClick={() => setPropinando(true)}>
+              <HandCoins /> Propina
+            </Button>
+            <Button variant="outline" size="sm" className="h-10" onClick={() => setMoviendo(true)}>
+              <ArrowRightLeft /> Mover
+            </Button>
+          </div>
           <Button
             size="lg"
             variant={mesa.estado === 'cuenta' ? 'default' : 'oscuro'}
@@ -330,6 +386,10 @@ export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberad
         salon={salon}
         alCerrar={() => setEditando(false)}
       />
+      <DialogoPropina abierto={propinando} cuenta={p} alCerrar={() => setPropinando(false)} />
+      <DialogoDividir abierto={dividiendo} cuenta={p} comensales={resumen.comensales} alCerrar={() => setDividiendo(false)} />
+      <DialogoMesas abierto={moviendo} mesa={mesa} salon={salon} alCerrar={() => setMoviendo(false)} alMovida={alElegirMesa} />
+      <DialogoQuitar pedidoId={resumen.pedidoId} item={quitando} alCerrar={() => setQuitando(null)} />
     </div>
   );
 }

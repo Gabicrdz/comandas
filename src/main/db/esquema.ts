@@ -112,6 +112,8 @@ export const pedidos = sqliteTable('pedidos', {
   comensales: integer('comensales'),
   mozoId: integer('mozo_id').references(() => usuarios.id),
   cuentaPedidaEn: text('cuenta_pedida_en'),
+  /** Parte de total_centavos que es propina (no es venta del local). */
+  propinaCentavos: integer('propina_centavos').notNull().default(0),
 });
 
 export const pedidoItems = sqliteTable('pedido_items', {
@@ -263,4 +265,23 @@ export const comandas = sqliteTable('comandas', {
   empezadaEn: text('empezada_en'),
   listaEn: text('lista_en'),
   entregadaEn: text('entregada_en'),
+});
+
+// ───────── Cuenta de la mesa (etapa 4 de Comandas) ─────────
+
+/** Lo que el dueño sacó de una cuenta, con su motivo: queda como registro. */
+export const itemsQuitados = sqliteTable('items_quitados', {
+  id: integer('id').primaryKey(),
+  pedidoId: integer('pedido_id')
+    .notNull()
+    .references(() => pedidos.id),
+  productoId: integer('producto_id').references(() => productos.id),
+  nombre: text('nombre').notNull(),
+  cantidad: integer('cantidad').notNull(),
+  montoCentavos: integer('monto_centavos').notNull(),
+  ronda: integer('ronda').notNull().default(1),
+  sector: text('sector', { enum: ['cocina', 'barra'] }),
+  motivo: text('motivo').notNull(),
+  usuarioId: integer('usuario_id').references(() => usuarios.id),
+  creadoEn: text('creado_en').notNull(),
 });

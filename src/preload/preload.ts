@@ -68,6 +68,10 @@ const api: ApiCaja = {
     editarCuenta: (pedidoId, datos) => pedir(CANALES.mesaEditar, pedidoId, datos),
     pedirCuenta: (pedidoId, pedida) => pedir(CANALES.mesaPedirCuenta, pedidoId, pedida),
     liberar: (pedidoId) => pedir(CANALES.mesaLiberar, pedidoId),
+    fijarPropina: (pedidoId, propina) => pedir(CANALES.mesaPropina, pedidoId, propina),
+    quitarItem: (pedidoId, datos) => pedir(CANALES.mesaQuitarItem, pedidoId, datos),
+    pasarMesa: (pedidoId, mesaId) => pedir(CANALES.mesaPasar, pedidoId, mesaId),
+    juntarMesas: (origenId, destinoId) => pedir(CANALES.mesaJuntar, origenId, destinoId),
   },
   clientes: {
     buscar: (texto) => pedir(CANALES.clientesBuscar, texto),
@@ -77,12 +81,14 @@ const api: ApiCaja = {
   },
   reportes: {
     obtener: (rango) => pedir(CANALES.reportesObtener, rango),
+    salon: (rango) => pedir(CANALES.reportesSalon, rango),
   },
   impresion: {
     imprimir: (id, tipo) => pedir(CANALES.impresionImprimir, id, tipo),
     pdf: (id, tipo) => pedir(CANALES.impresionPdf, id, tipo),
     impresoras: () => pedir(CANALES.impresionImpresoras),
     ronda: (pedidoId, ronda, destino) => pedir(CANALES.impresionRonda, pedidoId, ronda, destino),
+    division: (pedidoId, partes, destino) => pedir(CANALES.impresionDivision, pedidoId, partes, destino),
   },
   configuracion: {
     obtener: () => pedir(CANALES.configuracionObtener),

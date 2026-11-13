@@ -10,3 +10,12 @@ export function useReporte(rango: Rango) {
     placeholderData: keepPreviousData,
   });
 }
+
+/** Rendimiento de cada mozo y tiempos de cocina y barra (solo se pide al abrir la pestaña Salón). */
+export function useReporteSalon(rango: Rango) {
+  return useQuery({
+    queryKey: ['reportes', 'salon', rango.desde, rango.hasta],
+    queryFn: () => desenvolver(caja().reportes.salon(rango)),
+    placeholderData: keepPreviousData,
+  });
+}

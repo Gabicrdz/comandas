@@ -364,3 +364,27 @@ export const esquemaPedirCuenta = z.object({ pedida: z.boolean() });
 export const esquemaEstadoComanda = z.object({ estado: z.enum(['pendiente', 'preparando', 'lista', 'entregada']) });
 export const esquemaPinCocina = z.object({ pin: z.string().regex(/^\d{4,6}$/, 'El PIN tiene que tener de 4 a 6 números.') });
 export const esquemaSectorPantalla = z.enum(['todos', 'cocina', 'barra']).catch('todos');
+
+// ---------- Cuenta de la mesa (etapa 4) ----------
+/** La propina en centavos (0 = sin propina). El tope contra el consumo lo controla el main. */
+export const esquemaPropina = z.number().int('La propina tiene que ser un monto entero.').min(0, 'La propina no puede ser negativa.').max(100_000_000);
+
+export const esquemaQuitarItem = z.object({
+  itemId: z.number().int().positive(),
+  cantidad: z.number().int().min(1, 'Elegí cuántas unidades sacar.').max(999),
+  motivo: esquemaMotivo,
+});
+export type DatosQuitarItem = z.input<typeof esquemaQuitarItem>;
+
+export const esquemaPartesImpresas = z
+  .array(
+    z.object({
+      titulo: z.string().trim().min(1).max(40),
+      renglones: z.array(z.object({ texto: z.string().max(120), montoCentavos: z.number().int().min(0) })).max(80),
+      consumoCentavos: z.number().int().min(0),
+      propinaCentavos: z.number().int().min(0),
+      totalCentavos: z.number().int().min(0),
+    }),
+  )
+  .min(1)
+  .max(30);

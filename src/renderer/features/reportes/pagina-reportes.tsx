@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useReporte } from './consultas';
 import { PERIODOS, columnasDeVentas, rangoDe, tablaDeVentas, textoAnterior, textoPedidos, textoRango, type Periodo, type Rango } from './rangos';
 import { TablaProductos } from './tabla-productos';
+import { SeccionSalon } from './seccion-salon';
 
 export function PaginaReportes() {
   const [periodo, setPeriodo] = useState<Periodo | 'elegido'>('7dias');
@@ -52,6 +53,7 @@ export function PaginaReportes() {
           <TabsList>
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
             <TabsTrigger value="productos">Productos</TabsTrigger>
+            <TabsTrigger value="salon">Salón</TabsTrigger>
           </TabsList>
           <TabsContent value="resumen" className="flex flex-col gap-5">
             <Datos r={r} />
@@ -63,6 +65,9 @@ export function PaginaReportes() {
           </TabsContent>
           <TabsContent value="productos">
             <TablaProductos productos={r.productos} />
+          </TabsContent>
+          <TabsContent value="salon">
+            <SeccionSalon rango={rango} />
           </TabsContent>
         </Tabs>
       )}
@@ -191,6 +196,7 @@ function Datos({ r }: { r: Reporte }) {
             {r.sinCobrar.cantidad > 0 && (
               <p className="mt-1 text-[13px] text-tinta-suave">Incluye {pesos(r.sinCobrar.totalCentavos)} a cobrar</p>
             )}
+            {r.propinasCentavos > 0 && <p className="mt-1 text-[13px] text-tinta-suave">Sin contar {pesos(r.propinasCentavos)} de propinas</p>}
           </>
         }
       />
