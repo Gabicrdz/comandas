@@ -13,6 +13,8 @@ export interface ControlRed {
   /** Lee Ajustes y deja el servidor prendido o apagado según corresponda. */
   aplicar(): Promise<EstadoRed>;
   detener(): Promise<void>;
+  /** Abre la pantalla de cocina en una ventana de esta PC (la pone main.ts). */
+  abrirCocina?(): void;
 }
 
 export function crearControlRed(opciones: {

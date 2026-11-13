@@ -55,7 +55,8 @@ const esquemaFormulario = z
     ),
     gruposIds: z.array(z.number()),
     disponible: z.boolean(),
-    vaACocina: z.boolean(),
+    /** Dónde se prepara: cocina, barra o "no se prepara". */
+    preparacion: z.enum(['cocina', 'barra', 'no']),
   })
   .superRefine((f, ctx) => {
     if (!f.conTamanos) {
@@ -94,7 +95,7 @@ function valoresIniciales(producto: Producto | null, categoriaId: number | null)
         ],
     gruposIds: producto?.gruposIds ?? [],
     disponible: producto?.disponible ?? true,
-    vaACocina: producto?.vaACocina ?? true,
+    preparacion: !producto ? 'cocina' : producto.vaACocina ? (producto.sector ?? 'cocina') : 'no',
   };
 }
 
@@ -111,7 +112,8 @@ function aDatos(f: Formulario, id: number | undefined): DatosProducto {
       : [],
     gruposIds: f.gruposIds,
     disponible: f.disponible,
-    vaACocina: f.vaACocina,
+    vaACocina: f.preparacion !== 'no',
+    sector: f.preparacion === 'no' ? null : f.preparacion,
   };
 }
 
@@ -377,14 +379,36 @@ export function EditorProducto({
               />
               <Controller
                 control={control}
-                name="vaACocina"
+                name="preparacion"
                 render={({ field }) => (
-                  <Interruptor
-                    titulo="Se prepara en cocina"
-                    detalle="Sale en la comanda. Apagalo para bebidas envasadas."
-                    checked={field.value}
-                    onChange={field.onChange}
-                  />
+                  <fieldset className="col-span-2 flex flex-col gap-2">
+                    <legend className="mb-1 text-sm font-semibold">¿Dónde se prepara?</legend>
+                    <div role="radiogroup" aria-label="Dónde se prepara" className="grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          ['cocina', 'Cocina', 'Platos, minutas, postres'],
+                          ['barra', 'Barra', 'Café, jugos, tragos'],
+                          ['no', 'No se prepara', 'Gaseosas, envasados'],
+                        ] as const
+                      ).map(([valor, titulo, ayuda]) => (
+                        <button
+                          key={valor}
+                          type="button"
+                          role="radio"
+                          aria-checked={field.value === valor}
+                          onClick={() => field.onChange(valor)}
+                          className={cn(
+                            'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2.5 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25',
+                            field.value === valor ? 'border-tinta bg-tinta text-white' : 'border-linea hover:border-linea-fuerte',
+                          )}
+                        >
+                          <span className="font-semibold">{titulo}</span>
+                          <span className={cn('text-[12px]', field.value === valor ? 'text-white/70' : 'text-tinta-suave')}>{ayuda}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[13px] text-tinta-suave">Cocina y barra tienen cada una su comanda y su pantalla.</p>
+                  </fieldset>
                 )}
               />
             </div>

@@ -5,6 +5,7 @@ import { BrowserWindow, app, shell } from 'electron';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Impresora } from '@compartido/tipos';
+import { ErrorDeUsuario } from '../servicios/errores';
 
 const MM_A_PX = 96 / 25.4; // a 96 puntos por pulgada
 
@@ -43,7 +44,17 @@ export async function imprimirHtml(html: string, anchoMm: 58 | 80, impresora: st
         (exito, motivo) => {
           // Cancelar el diálogo no es un error: simplemente no se imprimió.
           if (exito || /cancel/i.test(motivo)) resolver(exito);
-          else rechazar(new Error(motivo));
+          else {
+            // Que se vea el motivo real (antes salía "error inesperado" y no se sabía qué pasó).
+            console.error('Falló la impresión:', motivo, '· impresora:', impresora || '(diálogo de Windows)');
+            rechazar(
+              new ErrorDeUsuario(
+                impresora
+                  ? `No se pudo imprimir en "${impresora}" (${motivo}). Revisá que esté prendida y conectada, o elegí otra en Ajustes → Impresión.`
+                  : `No se pudo imprimir (${motivo}). Elegí una impresora en Ajustes → Impresión, o probá con "PDF".`,
+              ),
+            );
+          }
         },
       );
     });

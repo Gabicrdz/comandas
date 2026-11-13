@@ -2,6 +2,7 @@
 // vivo por SSE: cuando la PC avisa un cambio, se vuelven a pedir los datos.
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import type { Cambio, IngresoMozo, Menu, PedidoDetalle, RondaAgregada, Salon, Usuario } from '@compartido/tipos';
 import type { DatosRonda } from '@compartido/esquemas';
 import { pedir, tokenGuardado } from './api';
@@ -43,7 +44,13 @@ export const usePedirCuenta = () =>
  * Se conecta a /api/eventos (Server-Sent Events). EventSource se reconecta
  * solo si se corta el wifi; mientras tanto mostramos "Sin conexión".
  */
-export function useEventos(activo: boolean): boolean {
+/** Un aviso fuerte en el celular: vibra y muestra el cartel. */
+function avisarAlMozo(texto: string, detalle?: string): void {
+  navigator.vibrate?.([120, 60, 120]);
+  toast.success(texto, { description: detalle, duration: 10_000 });
+}
+
+export function useEventos(activo: boolean, yoId?: number): boolean {
   const cliente = useQueryClient();
   const [conectado, setConectado] = useState(true);
   const [intento, setIntento] = useState(0);
@@ -58,6 +65,10 @@ export function useEventos(activo: boolean): boolean {
     });
     fuente.addEventListener('cambio', (e) => {
       const cambio = JSON.parse((e as MessageEvent<string>).data) as Cambio;
+      // Lo que la cocina o la barra terminó para MIS mesas: hay que ir a buscarlo.
+      if (cambio.tipo === 'comanda' && cambio.estado === 'lista' && cambio.mesa && cambio.mozoId === yoId) {
+        avisarAlMozo(`Mesa ${cambio.mesa}: ${cambio.sector === 'barra' ? 'la barra' : 'la cocina'} ya lo tiene listo`, `Ronda ${cambio.ronda} · andá a buscarlo`);
+      }
       if (cambio.tipo === 'menu') void cliente.invalidateQueries({ queryKey: ['menu'] });
       else {
         void cliente.invalidateQueries({ queryKey: ['salon'] });
@@ -77,6 +88,9 @@ export function useEventos(activo: boolean): boolean {
       fuente.close();
       window.clearTimeout(reintento);
     };
-  }, [activo, intento, cliente]);
+  }, [activo, intento, cliente, yoId]);
   return conectado;
 }
+
+/** El mozo llevó a la mesa lo que estaba listo. */
+export const useEntregarComanda = () => useCambio((comandaId: number) => pedir<null>(`/api/comandas/${comandaId}/entregada`, {}));

@@ -138,7 +138,7 @@ function Ingreso({ alEntrar }: { alEntrar: (u: Usuario) => void }) {
 
 function Sistema({ yo, alSalir }: { yo: Usuario; alSalir: () => void }) {
   const [vista, setVista] = useState<Vista>({ pantalla: 'mesas' });
-  const conectado = useEventos(true);
+  const conectado = useEventos(true, yo.id);
   const volver = () => setVista(vista.pantalla === 'ronda' ? { pantalla: 'mesa', mesaId: vista.mesaId } : { pantalla: 'mesas' });
 
   // El botón "atrás" del celular tiene que volver una pantalla, no salir de la

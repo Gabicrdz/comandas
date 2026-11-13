@@ -24,6 +24,7 @@ export function obtenerConfiguracion(db: BaseDeDatos): Configuracion {
     // Las claves nuevas no necesitan migración: si no están, valen lo de acá.
     redActiva: valores.get('red_activa') === '1',
     redPuerto: Number(valores.get('red_puerto') ?? 3000),
+    hayPinCocina: Boolean(valores.get('cocina_pin_hash')),
   };
 }
 
@@ -59,4 +60,19 @@ export function guardarRed(db: BaseDeDatos, datos: z.output<typeof esquemaRed>):
     guardar(db, 'red_activa', datos.activa ? '1' : '0');
     guardar(db, 'red_puerto', String(datos.puerto));
   });
+}
+
+/** El PIN de la pantalla de cocina se guarda como el de los usuarios: hash + sal, nunca el número. */
+export function guardarPinCocina(db: BaseDeDatos, hash: string, sal: string): void {
+  db.transaction(() => {
+    guardar(db, 'cocina_pin_hash', hash);
+    guardar(db, 'cocina_pin_sal', sal);
+  });
+}
+
+export function pinCocinaGuardado(db: BaseDeDatos): { hash: string; sal: string } | null {
+  const filas = db.select().from(configuracion).all();
+  const hash = filas.find((f) => f.clave === 'cocina_pin_hash')?.valor;
+  const sal = filas.find((f) => f.clave === 'cocina_pin_sal')?.valor;
+  return hash && sal ? { hash, sal } : null;
 }

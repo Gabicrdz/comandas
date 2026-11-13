@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { Contador } from '@/features/vender/dialogo-armar';
 import { useImprimir } from '@/features/pedidos/consultas';
 import { useAccionSalon, useCuenta } from './consultas';
+import { EstadoComandas } from './estado-comandas';
 
 // ───────────────────────── Resumen (ninguna mesa elegida) ─────────────────────────
 
@@ -196,6 +197,7 @@ export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberad
   const cuenta = useCuenta(resumen.pedidoId);
   const pedirCuenta = useAccionSalon(caja().salon.pedirCuenta);
   const liberar = useAccionSalon(caja().salon.liberar, { exito: `Mesa ${mesa.nombre} liberada` });
+  const entregar = useAccionSalon(caja().cocina.cambiarEstado);
   const { imprimir } = useImprimir();
   const [editando, setEditando] = useState(false);
   const p = cuenta.data;
@@ -244,9 +246,10 @@ export function PanelCuenta({ mesa, salon, ahora, alAgregar, alCobrar, alLiberad
               const items = p.items.filter((i) => i.ronda === r.numero);
               return (
                 <li key={r.numero} className="border-b border-linea">
-                  <div className="flex items-center justify-between bg-[#fafaf8] px-5 py-1.5 text-[12px] font-semibold tracking-wide text-tinta-suave uppercase">
-                    <span>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-[#fafaf8] px-5 py-1.5 text-[12px] font-semibold tracking-wide text-tinta-suave uppercase">
+                    <span className="flex flex-wrap items-center gap-2">
                       Ronda {r.numero} · {r.hora}
+                      <EstadoComandas comandas={p.comandas.filter((c) => c.ronda === r.numero)} alEntregar={(id) => entregar.mutate([id, 'entregada'])} />
                     </span>
                     {items.some((i) => i.vaACocina) && (
                       <button

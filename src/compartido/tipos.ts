@@ -23,9 +23,15 @@ export interface Producto {
   precioCentavos: number;
   disponible: boolean;
   vaACocina: boolean;
+  /** Dónde se prepara: cocina, barra o null (no se prepara, como una gaseosa). */
+  sector: Sector | null;
   variantes: Variante[];
   gruposIds: number[];
 }
+
+export const SECTORES = ['cocina', 'barra'] as const;
+export type Sector = (typeof SECTORES)[number];
+export const NOMBRE_SECTOR: Record<Sector, string> = { cocina: 'Cocina', barra: 'Barra' };
 
 export interface Opcion {
   id: number;
@@ -101,6 +107,7 @@ export interface ItemDetalle {
   agregados: AgregadoDetalle[];
   /** En una mesa: en qué ronda se pidió (1, 2, 3…). En los demás pedidos, 1. */
   ronda: number;
+  sector: Sector | null;
 }
 
 /** Cada vez que una mesa pide algo más. */
@@ -147,6 +154,43 @@ export interface PedidoDetalle {
   /** 'AAAA-MM-DD HH:MM:SS' en que pidieron la cuenta (null = no la pidieron). */
   cuentaPedidaEn: string | null;
   rondas: RondaDetalle[];
+  /** Lo que tiene que preparar cada sector, con su estado (cocina y barra). */
+  comandas: ComandaResumen[];
+}
+
+export const ESTADOS_COMANDA = ['pendiente', 'preparando', 'lista', 'entregada'] as const;
+export type EstadoComanda = (typeof ESTADOS_COMANDA)[number];
+export const NOMBRE_ESTADO_COMANDA: Record<EstadoComanda, string> = {
+  pendiente: 'En espera',
+  preparando: 'Preparando',
+  lista: 'Lista',
+  entregada: 'Entregada',
+};
+
+export interface ComandaResumen {
+  id: number;
+  ronda: number;
+  sector: Sector;
+  estado: EstadoComanda;
+}
+
+/** Una comanda como la ve la pantalla de cocina. */
+export interface Comanda extends ComandaResumen {
+  pedidoId: number;
+  numero: number;
+  tipo: TipoPedido;
+  /** Nombre de la mesa (o '' si no es de mesa). */
+  mesa: string;
+  clienteNombre: string;
+  mozo: string | null;
+  mozoId: number | null;
+  /** Nota general del pedido. */
+  nota: string;
+  /** 'AAAA-MM-DD HH:MM:SS' */
+  creadaEn: string;
+  empezadaEn: string | null;
+  listaEn: string | null;
+  items: ItemDetalle[];
 }
 
 export type TipoImpresion = 'comanda' | 'ticket' | 'cierre';
@@ -246,6 +290,8 @@ export interface Configuracion {
   /** Mozos con celular: si el servidor de la red local tiene que arrancar al abrir. */
   redActiva: boolean;
   redPuerto: number;
+  /** Si ya hay un PIN para la pantalla de cocina. */
+  hayPinCocina: boolean;
 }
 
 /** Toda respuesta del main tiene esta forma (igual que en los proyectos anteriores). */
@@ -415,7 +461,20 @@ export type Cambio =
       quien: string;
       vaACocina: boolean;
     }
-  | { tipo: 'cuenta'; origen: 'pc' | 'celular'; mesa: string; quien: string };
+  | { tipo: 'cuenta'; origen: 'pc' | 'celular'; mesa: string; quien: string }
+  /** Una comanda cambió de estado en la cocina o la barra. */
+  | {
+      tipo: 'comanda';
+      estado: EstadoComanda;
+      comandaId: number;
+      pedidoId: number;
+      numero: number;
+      /** '' si no es de mesa. */
+      mesa: string;
+      sector: Sector;
+      ronda: number;
+      mozoId: number | null;
+    };
 
 export interface EstadoRed {
   activa: boolean;

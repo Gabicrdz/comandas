@@ -25,6 +25,7 @@ export const productos = sqliteTable('productos', {
   precioCentavos: integer('precio_centavos').notNull(),
   disponible: integer('disponible', { mode: 'boolean' }).notNull().default(true),
   vaACocina: integer('va_a_cocina', { mode: 'boolean' }).notNull().default(true),
+  sector: text('sector', { enum: ['cocina', 'barra'] }),
   activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
   orden: integer('orden').notNull().default(0),
   creadoEn: text('creado_en').notNull().default(ahora),
@@ -130,6 +131,7 @@ export const pedidoItems = sqliteTable('pedido_items', {
   totalCentavos: integer('total_centavos').notNull(),
   nota: text('nota').notNull().default(''),
   vaACocina: integer('va_a_cocina', { mode: 'boolean' }).notNull().default(true),
+  sector: text('sector', { enum: ['cocina', 'barra'] }),
   orden: integer('orden').notNull().default(0),
   ronda: integer('ronda').notNull().default(1),
 });
@@ -243,4 +245,22 @@ export const rondas = sqliteTable('rondas', {
   numero: integer('numero').notNull(),
   creadaEn: text('creada_en').notNull(),
   usuarioId: integer('usuario_id').references(() => usuarios.id),
+});
+
+// ───────── Cocina y barra (etapa 3 de Comandas) ─────────
+
+export const comandas = sqliteTable('comandas', {
+  id: integer('id').primaryKey(),
+  pedidoId: integer('pedido_id')
+    .notNull()
+    .references(() => pedidos.id),
+  ronda: integer('ronda').notNull().default(1),
+  sector: text('sector', { enum: ['cocina', 'barra'] }).notNull(),
+  estado: text('estado', { enum: ['pendiente', 'preparando', 'lista', 'entregada'] })
+    .notNull()
+    .default('pendiente'),
+  creadaEn: text('creada_en').notNull(),
+  empezadaEn: text('empezada_en'),
+  listaEn: text('lista_en'),
+  entregadaEn: text('entregada_en'),
 });

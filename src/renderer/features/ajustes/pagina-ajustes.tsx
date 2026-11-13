@@ -20,6 +20,7 @@ import { TarjetaCopias } from './tarjeta-copias';
 import { TarjetaDemo } from './tarjeta-demo';
 import { TarjetaLocal } from './tarjeta-local';
 import { TarjetaRed } from './tarjeta-red';
+import { TarjetaCocina } from './tarjeta-cocina';
 
 const PERMISOS: Record<Rol, string> = {
   dueno: 'Todo: menú, precios, anular pedidos, retiros, usuarios y reportes.',
@@ -114,6 +115,7 @@ export function PaginaAjustes() {
       </section>
 
       <TarjetaRed />
+      <TarjetaCocina />
       <TarjetaCopias />
       <TarjetaDemo />
       <AcercaDe />

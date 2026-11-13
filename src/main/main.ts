@@ -11,6 +11,7 @@ import { obtenerConfiguracion } from './servicios/configuracion';
 import { obtenerPedido } from './servicios/pedidos';
 import { htmlComanda } from './impresion/plantillas';
 import { imprimirHtml } from './impresion/imprimir';
+import { ErrorDeUsuario } from './servicios/errores';
 
 // Instalador de Windows: crea/borra accesos directos y se cierra.
 if (started) app.quit();
@@ -75,11 +76,48 @@ app.on('second-instance', () => {
 
 // El servidor de los celulares. La app del mozo (mozo.html) se arma junto con la
 // ventana: en desarrollo la sirve Vite; instalada, está en la carpeta del renderer.
-const red = crearControlRed({
-  obtenerDb,
-  carpetaApp: MAIN_WINDOW_VITE_DEV_SERVER_URL ? null : path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`),
-  urlDesarrollo: MAIN_WINDOW_VITE_DEV_SERVER_URL ?? null,
-});
+const red = {
+  ...crearControlRed({
+    obtenerDb,
+    carpetaApp: MAIN_WINDOW_VITE_DEV_SERVER_URL ? null : path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`),
+    urlDesarrollo: MAIN_WINDOW_VITE_DEV_SERVER_URL ?? null,
+  }),
+  abrirCocina,
+};
+
+let ventanaCocina: BrowserWindow | null = null;
+
+/**
+ * La pantalla de cocina en una ventana aparte de esta PC (por ejemplo, en un
+ * segundo monitor que mira hacia la cocina). Es la MISMA página que abre una
+ * tablet: la pide al servidor de la red local, así que tiene que estar prendido.
+ */
+function abrirCocina(): void {
+  const estado = red.estado();
+  if (!estado.funcionando) {
+    throw new ErrorDeUsuario('Primero prendé "Mozos con celular" en Ajustes: la pantalla de cocina usa ese mismo servidor.');
+  }
+  if (ventanaCocina && !ventanaCocina.isDestroyed()) {
+    ventanaCocina.focus();
+    return;
+  }
+  const origen = `http://127.0.0.1:${estado.puerto}`;
+  ventanaCocina = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    title: 'Comandas · Cocina',
+    autoHideMenuBar: true,
+    backgroundColor: '#1b1c1e',
+    // Sin preload: es una página web común, no tiene acceso a nada de la PC.
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  ventanaCocina.webContents.on('will-navigate', (evento, url) => {
+    if (!url.startsWith(origen)) evento.preventDefault();
+  });
+  ventanaCocina.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  ventanaCocina.on('closed', () => (ventanaCocina = null));
+  void ventanaCocina.loadURL(`${origen}/cocina`);
+}
 
 /**
  * Cuando un mozo manda una ronda desde el celular y hay una impresora elegida

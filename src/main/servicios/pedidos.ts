@@ -15,6 +15,7 @@ import {
   type ResumenDelDia,
 } from '@compartido/tipos';
 import { ErrorDeUsuario } from './errores';
+import { comandasDe, crearComandas, seguirEstadoDelPedido } from './comandas';
 import { obtenerMenu } from './menu';
 import { fechaLocal, horaLocal } from './fechas';
 import { cajaAbierta } from './caja';
@@ -116,6 +117,7 @@ export function guardarLineas(tx: Tx, pedidoId: number, lineas: LineaArmada[], r
         totalCentavos: l.totalCentavos,
         nota: l.nota,
         vaACocina: l.producto.vaACocina,
+        sector: l.producto.vaACocina ? (l.producto.sector ?? 'cocina') : null,
         orden: ordenDesde + i,
         ronda,
       })
@@ -206,6 +208,7 @@ export function crearPedido(
       .get().id;
 
     guardarLineas(tx, pedidoId, lineas);
+    crearComandas(tx, pedidoId, 1, lineas, ahora);
 
     if (cajaId !== null) guardarPagos(tx, pedidoId, pagosCalculados, cajaId, usuarioId);
 
@@ -262,6 +265,7 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
     .where(inArray(rondas.pedidoId, ids))
     .orderBy(asc(rondas.numero))
     .all();
+  const listaComandas = comandasDe(db, ids);
   const idsMozos = [...new Set(filas.map((f) => f.mozoId).filter((m): m is number => m !== null))];
   const mozos = new Map(
     (idsMozos.length ? db.select({ id: usuarios.id, nombre: usuarios.nombre }).from(usuarios).where(inArray(usuarios.id, idsMozos)).all() : []).map(
@@ -299,6 +303,7 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
         nota: i.nota,
         vaACocina: i.vaACocina,
         ronda: i.ronda,
+        sector: i.sector ?? null,
         agregados: agregados
           .filter((a) => a.itemId === i.id)
           .map((a) => ({ grupoNombre: a.grupoNombre, nombre: a.nombre, precioCentavos: a.precioCentavos })),
@@ -319,6 +324,7 @@ export function listarPedidos(db: Pick<BaseDeDatos, 'select'>, filtro: { fecha: 
     rondas: listaRondas
       .filter((r) => r.pedidoId === f.id)
       .map((r) => ({ numero: r.numero, hora: r.creadaEn.slice(11, 16), usuario: r.usuario ?? null })),
+    comandas: listaComandas.filter((c) => c.pedidoId === f.id).map(({ id, ronda, sector, estado }) => ({ id, ronda, sector, estado })),
   }));
 }
 
@@ -342,6 +348,7 @@ export function cambiarEstado(db: BaseDeDatos, id: number, estado: z.output<type
       throw new ErrorDeUsuario(`El pedido #${pedido.numero} todavía no está cobrado. Cobralo antes de entregarlo.`);
     }
     tx.update(pedidos).set({ estado, actualizadoEn: ahoraSql }).where(eq(pedidos.id, id)).run();
+    seguirEstadoDelPedido(tx, id, estado);
   });
 }
 

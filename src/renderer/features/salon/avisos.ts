@@ -48,6 +48,16 @@ export function useAvisosEnVivo(activo: boolean): void {
           duration: 10_000,
         });
       }
+      if (cambio.tipo === 'comanda' && cambio.estado === 'lista') {
+        const sector = cambio.sector === 'barra' ? 'la barra' : 'la cocina';
+        if (cambio.mesa) {
+          toast(`Mesa ${cambio.mesa}: ${sector} terminó la ronda ${cambio.ronda}`, { duration: 6000 });
+        } else {
+          // Mostrador, para llevar o delivery: hay que llamar al cliente o despachar.
+          sonar();
+          toast(`Pedido #${cambio.numero} listo para entregar`, { description: `Avisó ${sector}`, duration: 12_000 });
+        }
+      }
       if (cambio.tipo === 'cuenta' && cambio.origen === 'celular') {
         sonar();
         toast(`La mesa ${cambio.mesa} pide la cuenta`, { description: `Avisó ${cambio.quien}`, duration: 10_000 });

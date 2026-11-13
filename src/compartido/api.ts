@@ -40,6 +40,7 @@ import type {
   Salon,
   Cambio,
   EstadoRed,
+  EstadoComanda,
   ResumenCaja,
   ResumenDelDia,
   TipoImpresion,
@@ -174,6 +175,14 @@ export interface ApiCaja {
    * desde el celular). Devuelve la función para dejar de escuchar.
    */
   alCambiar(fn: (cambio: Cambio) => void): () => void;
+  cocina: {
+    /** Solo el dueño: el PIN con el que entran las pantallas de cocina y barra. */
+    cambiarPin(pin: string): Promise<Respuesta<null>>;
+    /** Abre la pantalla de cocina en otra ventana (para un segundo monitor). */
+    abrirVentana(): Promise<Respuesta<null>>;
+    /** Por ejemplo, marcar como entregado lo que la cocina dejó listo. */
+    cambiarEstado(comandaId: number, estado: EstadoComanda): Promise<Respuesta<null>>;
+  };
 }
 
 /** Nombre de cada canal IPC: "seccion:accion". */
@@ -245,4 +254,7 @@ export const CANALES = {
   sistemaInfo: 'sistema:info',
   redEstado: 'red:estado',
   redConfigurar: 'red:configurar',
+  cocinaPin: 'cocina:pin',
+  cocinaAbrir: 'cocina:abrir',
+  comandaEstado: 'comandas:estado',
 } as const;

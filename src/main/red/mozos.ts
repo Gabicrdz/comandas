@@ -13,13 +13,26 @@ import { comprobarPin } from '../servicios/sesion';
 /** Si el celular no se usa en 14 horas (un turno largo), tiene que volver a poner el PIN. */
 export const DURACION_SESION_MS = 14 * 60 * 60 * 1000;
 
-const sesiones = new Map<string, { usuarioId: number; vence: number }>();
+/** tipo 'mozo' = un celular de un mozo; 'cocina' = una pantalla de cocina o barra (sin usuario). */
+const sesiones = new Map<string, { usuarioId: number | null; tipo: 'mozo' | 'cocina'; vence: number }>();
+
+export function crearSesion(tipo: 'mozo' | 'cocina', usuarioId: number | null, ahora: number = Date.now()): string {
+  const token = randomBytes(24).toString('hex');
+  sesiones.set(token, { usuarioId, tipo, vence: ahora + DURACION_SESION_MS });
+  return token;
+}
+
+/** ¿Es un token válido de una pantalla de cocina? (Se renueva al usarlo.) */
+export function esTokenDeCocina(token: string | null, ahora: number = Date.now()): boolean {
+  const sesion = token ? sesiones.get(token) : undefined;
+  if (!sesion || sesion.tipo !== 'cocina' || sesion.vence < ahora) return false;
+  sesion.vence = ahora + DURACION_SESION_MS;
+  return true;
+}
 
 export function ingresarMozo(db: BaseDeDatos, usuarioId: number, pin: string, ahora: number = Date.now()): IngresoMozo {
   const usuario = comprobarPin(db, usuarioId, pin, ahora); // 5 PIN mal → espera, igual que en la PC
-  const token = randomBytes(24).toString('hex');
-  sesiones.set(token, { usuarioId: usuario.id, vence: ahora + DURACION_SESION_MS });
-  return { token, usuario };
+  return { token: crearSesion('mozo', usuario.id, ahora), usuario };
 }
 
 /**
@@ -33,6 +46,7 @@ export function usuarioDelToken(db: BaseDeDatos, token: string | null, ahora: nu
     sesiones.delete(token);
     return null;
   }
+  if (sesion.tipo !== 'mozo' || sesion.usuarioId === null) return null;
   const u = db
     .select({ id: usuarios.id, nombre: usuarios.nombre, rol: usuarios.rol })
     .from(usuarios)
@@ -50,7 +64,7 @@ export function salirMozo(token: string | null): void {
   if (token) sesiones.delete(token);
 }
 
-/** Al apagar el servidor (o restaurar una copia), todos los celulares vuelven a pedir PIN. */
+/** Al apagar el servidor (o restaurar una copia), todos los celulares y pantallas vuelven a pedir PIN. */
 export function cerrarSesionesDeMozos(): void {
   sesiones.clear();
 }

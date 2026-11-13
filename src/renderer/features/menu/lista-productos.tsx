@@ -1,4 +1,4 @@
-import { ChefHat, Copy, Ellipsis, Pencil, Trash2 } from 'lucide-react';
+import { ChefHat, Copy, CupSoda, Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import type { Categoria, GrupoAgregados, Producto } from '@compartido/tipos';
 import { pesos } from '@compartido/dinero';
 import { Badge } from '@/components/ui/badge';
@@ -103,10 +103,16 @@ function FilaProducto({
               {p.nombre}
             </button>
           )}
-          {!p.vaACocina && (
-            <Badge variant="contorno" title="No sale en la comanda de cocina">
-              <ChefHat /> No va a cocina
+          {!p.vaACocina ? (
+            <Badge variant="contorno" title="No sale en ninguna comanda">
+              <ChefHat /> No se prepara
             </Badge>
+          ) : (
+            p.sector === 'barra' && (
+              <Badge variant="contorno" title="Sale en la comanda de barra">
+                <CupSoda /> Barra
+              </Badge>
+            )
           )}
         </div>
         {(p.descripcion || nombresGrupos) && (

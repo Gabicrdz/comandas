@@ -54,6 +54,8 @@ export const esquemaProducto = z
     gruposIds: z.array(id).max(10).default([]),
     disponible: z.boolean().default(true),
     vaACocina: z.boolean().default(true),
+    /** Dónde se prepara. Si vaACocina es false, no importa: queda sin sector. */
+    sector: z.enum(['cocina', 'barra']).nullable().default('cocina'),
   })
   .superRefine((p, ctx) => {
     const vistos = new Set<string>();
@@ -357,3 +359,8 @@ export const esquemaAbrirMesaCelular = z.object({
 });
 
 export const esquemaPedirCuenta = z.object({ pedida: z.boolean() });
+
+// ---------- Cocina y barra (Comandas, etapa 3) ----------
+export const esquemaEstadoComanda = z.object({ estado: z.enum(['pendiente', 'preparando', 'lista', 'entregada']) });
+export const esquemaPinCocina = z.object({ pin: z.string().regex(/^\d{4,6}$/, 'El PIN tiene que tener de 4 a 6 números.') });
+export const esquemaSectorPantalla = z.enum(['todos', 'cocina', 'barra']).catch('todos');

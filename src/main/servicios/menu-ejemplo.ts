@@ -57,6 +57,8 @@ interface ProductoEjemplo {
   variantes?: [string, number][];
   grupos?: ClaveGrupo[];
   cocina?: boolean;
+  /** Dónde se prepara (si no se dice, en la cocina). */
+  sector?: 'cocina' | 'barra';
 }
 
 const MENU: [string, ProductoEjemplo[]][] = [
@@ -106,13 +108,13 @@ const MENU: [string, ProductoEjemplo[]][] = [
       { nombre: 'Gaseosa', codigo: 'B1', variantes: [['500 ml', 2000], ['1,5 L', 3800]], cocina: false },
       { nombre: 'Agua mineral', codigo: 'B2', variantes: [['500 ml', 1600], ['1,5 L', 2800]], cocina: false },
       { nombre: 'Cerveza lata 473 ml', codigo: 'B3', precio: 3200, cocina: false },
-      { nombre: 'Jugo exprimido', codigo: 'B4', precio: 3500 },
+      { nombre: 'Jugo exprimido', codigo: 'B4', precio: 3500, sector: 'barra' },
     ],
   ],
   [
     'Cafetería',
     [
-      { nombre: 'Café', codigo: 'C1', variantes: [['Chico', 1900], ['Jarrito', 2400], ['Doble', 3000]], grupos: ['leche'] },
+      { nombre: 'Café', codigo: 'C1', variantes: [['Chico', 1900], ['Jarrito', 2400], ['Doble', 3000]], grupos: ['leche'], sector: 'barra' },
       { nombre: 'Medialuna', codigo: 'C2', precio: 900 },
       { nombre: 'Tostadas con manteca y mermelada', codigo: 'C3', precio: 3600 },
     ],
@@ -182,6 +184,7 @@ export function cargarMenuDeEjemplo(db: BaseDeDatos): void {
           gruposIds: (p.grupos ?? []).map((clave) => ids.get(clave)!),
           disponible: true,
           vaACocina: p.cocina ?? true,
+          sector: p.cocina === false ? null : (p.sector ?? 'cocina'),
         });
       }
     }

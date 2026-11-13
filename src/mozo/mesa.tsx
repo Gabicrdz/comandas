@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Contador } from '@/features/vender/dialogo-armar';
 import { useAhora } from '@/features/salon/consultas';
-import { useAbrirMesa, useCuenta, usePedirCuenta, useSalon } from './consultas';
+import { useAbrirMesa, useCuenta, useEntregarComanda, usePedirCuenta, useSalon } from './consultas';
+import { EstadoComandas } from '@/features/salon/estado-comandas';
 
 export function PantallaMesa({ mesaId, alAgregar, alVolver }: { mesaId: number; alAgregar: () => void; alVolver: () => void }) {
   const salon = useSalon();
@@ -17,6 +18,7 @@ export function PantallaMesa({ mesaId, alAgregar, alVolver }: { mesaId: number; 
   const cuenta = useCuenta(mesa?.cuenta?.pedidoId ?? null);
   const abrir = useAbrirMesa();
   const pedirCuenta = usePedirCuenta();
+  const entregar = useEntregarComanda();
   const [comensales, setComensales] = useState(2);
 
   if (!mesa) {
@@ -85,10 +87,16 @@ export function PantallaMesa({ mesaId, alAgregar, alVolver }: { mesaId: number; 
         ) : (
           p?.rondas.map((r) => (
             <section key={r.numero} className="border-b border-linea">
-              <h2 className="bg-[#fafaf8] px-5 py-1.5 text-[12px] font-semibold tracking-wide text-tinta-suave uppercase">
-                Ronda {r.numero} · {r.hora}
-                {r.usuario ? ` · ${r.usuario}` : ''}
-              </h2>
+              <div className="flex flex-col gap-1.5 bg-[#fafaf8] px-5 py-1.5">
+                <h2 className="text-[12px] font-semibold tracking-wide text-tinta-suave uppercase">
+                  Ronda {r.numero} · {r.hora}
+                  {r.usuario ? ` · ${r.usuario}` : ''}
+                </h2>
+                <EstadoComandas
+                  comandas={p.comandas.filter((c) => c.ronda === r.numero)}
+                  alEntregar={(id) => entregar.mutate(id, { onSuccess: () => toast.success('Listo: marcado como llevado'), onError: (e) => toast.error(e.message) })}
+                />
+              </div>
               <ul className="divide-y divide-linea/70">
                 {p.items
                   .filter((i) => i.ronda === r.numero)

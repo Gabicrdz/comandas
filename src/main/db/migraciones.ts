@@ -345,4 +345,35 @@ export const MIGRACIONES: Migracion[] = [
       );
     `,
   },
+  {
+    nombre: 'Cocina y barra: sector de cada producto y comandas con estado',
+    sql: /* sql */ `
+      -- Dónde se prepara cada producto: 'cocina', 'barra' o NULL (no se prepara:
+      -- una gaseosa). va_a_cocina queda como estaba y se mantiene igual a
+      -- "sector no es NULL" (lo usan la impresión y los pedidos viejos).
+      ALTER TABLE productos ADD COLUMN sector TEXT CHECK (sector IS NULL OR sector IN ('cocina', 'barra'));
+      UPDATE productos SET sector = 'cocina' WHERE va_a_cocina = 1;
+
+      -- La "foto" del sector en cada renglón vendido, como el nombre y el precio.
+      ALTER TABLE pedido_items ADD COLUMN sector TEXT CHECK (sector IS NULL OR sector IN ('cocina', 'barra'));
+      UPDATE pedido_items SET sector = 'cocina' WHERE va_a_cocina = 1;
+
+      -- Una COMANDA = lo que un sector tiene que preparar de una ronda (o de un
+      -- pedido de mostrador). Si la ronda trae hamburguesas y un café, son dos
+      -- comandas: una para cocina y otra para barra, cada una con su estado.
+      CREATE TABLE comandas (
+        id            INTEGER PRIMARY KEY,
+        pedido_id     INTEGER NOT NULL REFERENCES pedidos (id),
+        ronda         INTEGER NOT NULL DEFAULT 1 CHECK (ronda >= 1),
+        sector        TEXT    NOT NULL CHECK (sector IN ('cocina', 'barra')),
+        estado        TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'preparando', 'lista', 'entregada')),
+        creada_en     TEXT    NOT NULL,          -- 'AAAA-MM-DD HH:MM:SS'
+        empezada_en   TEXT,
+        lista_en      TEXT,
+        entregada_en  TEXT,
+        UNIQUE (pedido_id, ronda, sector)
+      );
+      CREATE INDEX comandas_por_estado ON comandas (estado, creada_en);
+    `,
+  },
 ];

@@ -24,9 +24,12 @@ import type { BaseDeDatos } from '../db/conexion';
 import { usuarios } from '../db/esquema';
 import {
   esquemaAbrirMesaCelular,
+  esquemaEstadoComanda,
   esquemaIngresoMozo,
   esquemaPedirCuenta,
+  esquemaPinCocina,
   esquemaRonda,
+  esquemaSectorPantalla,
 } from '@compartido/esquemas';
 import { ErrorDeUsuario, mensajeDeError } from '../servicios/errores';
 import { obtenerMenu } from '../servicios/menu';
@@ -35,7 +38,9 @@ import * as salon from '../servicios/salon';
 import { obtenerConfiguracion } from '../servicios/configuracion';
 import { avisarCambio, escucharCambios } from './avisos';
 import { esDeLaRedLocal } from './redes';
-import { ingresarMozo, salirMozo, usuarioDelToken, cerrarSesionesDeMozos } from './mozos';
+import { ingresarMozo, salirMozo, usuarioDelToken, cerrarSesionesDeMozos, esTokenDeCocina } from './mozos';
+import { ingresarCocina } from './cocina';
+import { cambiarEstadoComanda, listarComandas, type ComandaCambiada } from '../servicios/comandas';
 
 export interface OpcionesServidor {
   puerto: number;
@@ -217,14 +222,53 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
     return;
   }
 
-  // ── Con PIN ──
+  if (metodo === 'POST' && ruta === '/api/cocina/ingresar') {
+    const { pin } = esquemaPinCocina.parse(await leerJson(req));
+    try {
+      responderJson(res, 200, { token: ingresarCocina(db, pin) });
+    } catch (error) {
+      throw new ErrorHttp(401, mensajeDeError(error));
+    }
+    return;
+  }
+
   const token = tokenDe(req, url);
+
+  // ── Pantalla de cocina / barra (token de cocina) ──
+  if (ruta.startsWith('/api/cocina/') || (ruta === '/api/eventos' && esTokenDeCocina(token))) {
+    if (!esTokenDeCocina(token)) throw new ErrorHttp(401, 'La pantalla se desconectó. Volvé a poner el PIN de cocina.');
+    if (metodo === 'GET' && ruta === '/api/eventos') {
+      abrirEventos(req, res);
+      return;
+    }
+    if (metodo === 'GET' && ruta === '/api/cocina/comandas') {
+      const sector = esquemaSectorPantalla.parse(url.searchParams.get('sector'));
+      return responderJson(res, 200, listarComandas(db, sector));
+    }
+    const estado = /^\/api\/cocina\/comandas\/(\d+)\/estado$/.exec(ruta);
+    if (metodo === 'POST' && estado) {
+      const datos = esquemaEstadoComanda.parse(await leerJson(req));
+      const cambio = cambiarEstadoComanda(db, idDe(estado[1]), datos.estado);
+      avisarComanda(cambio);
+      return responderJson(res, 200, null);
+    }
+    throw new ErrorHttp(404, 'No existe.');
+  }
+
+  // ── Celular de un mozo (token de mozo) ──
   const yo = usuarioDelToken(db, token);
   if (!yo) throw new ErrorHttp(401, 'Tu sesión se cerró. Volvé a poner tu PIN.');
 
   if (metodo === 'GET' && ruta === '/api/eventos') {
     abrirEventos(req, res);
     return;
+  }
+
+  // El mozo llevó a la mesa lo que estaba listo.
+  const entregada = /^\/api\/comandas\/(\d+)\/entregada$/.exec(ruta);
+  if (metodo === 'POST' && entregada) {
+    avisarComanda(cambiarEstadoComanda(db, idDe(entregada[1]), 'entregada'));
+    return responderJson(res, 200, null);
   }
   if (metodo === 'POST' && ruta === '/api/salir') {
     salirMozo(token);
@@ -269,6 +313,10 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
   throw new ErrorHttp(404, 'No existe.');
 }
 
+function avisarComanda(c: ComandaCambiada): void {
+  avisarCambio({ tipo: 'comanda', ...c });
+}
+
 /** Deja abierta la respuesta para ir mandando avisos (SSE). */
 function abrirEventos(req: http.IncomingMessage, res: http.ServerResponse): void {
   res.writeHead(200, {
@@ -302,8 +350,9 @@ const TIPOS: Record<string, string> = {
 };
 
 async function archivos(ruta: string, res: http.ServerResponse, opciones: OpcionesServidor): Promise<void> {
-  // La raíz es la app del mozo. La pantalla de la PC (index.html) NO se sirve.
-  const pedido = ruta === '/' || ruta === '/mozo' ? '/mozo.html' : ruta;
+  // La raíz es la app del mozo y /cocina, la pantalla de cocina. La pantalla de
+  // la PC (index.html) NO se sirve.
+  const pedido = ruta === '/' || ruta === '/mozo' ? '/mozo.html' : ruta === '/cocina' ? '/cocina.html' : ruta;
 
   if (opciones.urlDesarrollo) {
     // npm start: Vite arma la app al vuelo; se la pedimos y la reenviamos.
@@ -315,13 +364,13 @@ async function archivos(ruta: string, res: http.ServerResponse, opciones: Opcion
   }
 
   if (!opciones.carpetaApp) throw new ErrorHttp(404, 'No existe.');
-  // Solo mozo.html y lo que está DENTRO de assets/. Se arma la ruta final y se
+  // Solo mozo.html, cocina.html y lo que está DENTRO de assets/. Se arma la ruta final y se
   // revisa que siga adentro: así "/assets/..%2Findex.html" (que decodificado es
   // "/assets/../index.html") no sirve para salirse de la carpeta.
   const carpeta = path.resolve(opciones.carpetaApp);
   const assets = path.join(carpeta, 'assets');
   let archivo: string;
-  if (pedido === '/mozo.html') archivo = path.join(carpeta, 'mozo.html');
+  if (pedido === '/mozo.html' || pedido === '/cocina.html') archivo = path.join(carpeta, pedido.slice(1));
   else if (pedido.startsWith('/assets/')) {
     archivo = path.resolve(carpeta, '.' + decodeURIComponent(pedido));
     if (!archivo.startsWith(assets + path.sep)) throw new ErrorHttp(404, 'No existe.');

@@ -107,6 +107,11 @@ const api: ApiCaja = {
     estado: () => pedir(CANALES.redEstado),
     configurar: (datos) => pedir(CANALES.redConfigurar, datos),
   },
+  cocina: {
+    cambiarPin: (pin) => pedir(CANALES.cocinaPin, { pin }),
+    abrirVentana: () => pedir(CANALES.cocinaAbrir),
+    cambiarEstado: (comandaId, estado) => pedir(CANALES.comandaEstado, comandaId, { estado }),
+  },
   // Al revés que los demás: acá habla el MAIN y la ventana escucha
   // (webContents.send → ipcRenderer.on), como el "guardar antes de cerrar"
   // del bloc de notas.

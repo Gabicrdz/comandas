@@ -16,6 +16,7 @@ import type { CuentaDeMesa, FormaMesa, Mesa, RondaAgregada, Salon, Usuario } fro
 import { ErrorDeUsuario } from './errores';
 import { fechaLocal, horaLocal, momentoLocal } from './fechas';
 import { armarLineas, guardarLineas, siguienteNumero } from './pedidos';
+import { crearComandas } from './comandas';
 import { guardarUsuario } from './usuarios';
 import { obtenerMenu } from './menu';
 
@@ -330,6 +331,7 @@ export function agregarRonda(
     const renglones = renglonesDe(tx, pedidoId);
     tx.insert(rondas).values({ pedidoId, numero: ronda, creadaEn: momentoLocal(ahora), usuarioId: usuario?.id ?? null }).run();
     guardarLineas(tx, pedidoId, lineas, ronda, renglones);
+    crearComandas(tx, pedidoId, ronda, lineas, ahora);
 
     const vaACocina = lineas.some((l) => l.producto.vaACocina);
     const totalCentavos = cuenta.totalCentavos + rondaCentavos;

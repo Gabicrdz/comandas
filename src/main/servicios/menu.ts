@@ -107,6 +107,7 @@ export function obtenerMenu(db: Pick<BaseDeDatos, 'select'>): Menu {
     precioCentavos: p.precioCentavos,
     disponible: p.disponible,
     vaACocina: p.vaACocina,
+    sector: p.vaACocina ? (p.sector ?? 'cocina') : null,
     variantes: filasVariantes
       .filter((v) => v.productoId === p.id)
       .map((v) => ({ id: v.id, nombre: v.nombre, precioCentavos: v.precioCentavos })),
@@ -290,7 +291,9 @@ export function guardarProducto(db: BaseDeDatos, datos: ProductoValidado): numbe
       codigo,
       precioCentavos,
       disponible: datos.disponible,
-      vaACocina: datos.vaACocina,
+      // "Se prepara" y "sector" van siempre juntos: sin sector, no se prepara.
+      vaACocina: datos.vaACocina && datos.sector !== null,
+      sector: datos.vaACocina ? datos.sector : null,
     };
 
     let productoId: number;
@@ -410,6 +413,7 @@ export function duplicarProducto(db: BaseDeDatos, id: number): number {
     gruposIds: original.gruposIds,
     disponible: original.disponible,
     vaACocina: original.vaACocina,
+    sector: original.sector,
   });
 }
 

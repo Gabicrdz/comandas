@@ -33,6 +33,8 @@ import {
   esquemaRonda,
   esquemaZona,
   esquemaRed,
+  esquemaEstadoComanda,
+  esquemaPinCocina,
 } from '@compartido/esquemas';
 import type { Cambio, Configuracion, Respuesta, Usuario } from '@compartido/tipos';
 import { obtenerDb } from './db/conexion';
@@ -51,6 +53,8 @@ import {
 import { guardarImpresion, guardarLocal, guardarRed, obtenerConfiguracion } from './servicios/configuracion';
 import { avisarCambio } from './red/avisos';
 import { sinRed, type ControlRed } from './red/control';
+import { cambiarPinCocina } from './red/cocina';
+import { cambiarEstadoComanda } from './servicios/comandas';
 import { cargarDemo, hayPedidos } from './servicios/demo';
 import { abrirCarpetaCopias, elegirCopia, estadoCopias, exportarCopia, restaurarCopiaElegida } from './copias';
 import { darDeBajaUsuario, guardarUsuario, hayUsuarios, listarUsuarios } from './servicios/usuarios';
@@ -325,5 +329,21 @@ export function registrarCanales(info: () => { version: string; baseDeDatos: str
   manejar(CANALES.redConfigurar, 'dueno', z.tuple([esquemaRed]), async (d) => {
     guardarRed(db(), d);
     return red.aplicar();
+  });
+
+  // ── Cocina y barra ──
+  manejar(CANALES.cocinaPin, 'dueno', z.tuple([esquemaPinCocina]), ({ pin }) => {
+    cambiarPinCocina(db(), pin);
+    return null;
+  });
+  manejar(CANALES.cocinaAbrir, 'sesion', nada, () => {
+    if (!red.abrirCocina) throw new ErrorDeUsuario('La pantalla de cocina no se puede abrir acá.');
+    red.abrirCocina();
+    return null;
+  });
+  manejar(CANALES.comandaEstado, 'sesion', z.tuple([id, esquemaEstadoComanda]), (comandaId, { estado }) => {
+    const c = cambiarEstadoComanda(db(), comandaId, estado);
+    avisarCambio({ tipo: 'comanda', ...c });
+    return null;
   });
 }
